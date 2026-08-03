@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from nereus.agents.coach import CoachAgent
 from nereus.agents.examiner import ExaminerAgent
 from nereus.agents.tutor import TutorAgent
@@ -50,6 +52,17 @@ def test_tutor_falls_back_when_llm_returns_bad_json(roadmap, base_state) -> None
     topic = roadmap.topics[base_state["current_topic_index"]]
     assert result["material"] == f"Material for '{topic.title}': {topic.description}"
     assert result["task"] == f"Practical task: demonstrate mastery of '{topic.title}'."
+
+
+def test_tutor_does_not_swallow_provider_errors(roadmap, base_state) -> None:
+    def responder(messages, **_):
+        raise RuntimeError("provider failed")
+
+    tutor = TutorAgent(provider=StubLLMProvider(responder=responder))
+    base_state["roadmap"] = roadmap
+
+    with pytest.raises(RuntimeError, match="provider failed"):
+        tutor.run(base_state)
 
 
 def test_examiner_llm_evaluator(roadmap, base_state) -> None:

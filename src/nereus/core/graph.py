@@ -9,6 +9,7 @@ from nereus.agents.examiner import ExaminerAgent
 from nereus.agents.tutor import TutorAgent
 from nereus.core.router import ADVANCE_TUTOR, RETRY_TUTOR, route_after_exam
 from nereus.core.state import Assessment, NereusState, Roadmap, Verdict
+from nereus.llm.factory import build_llm_provider
 
 _DEFAULT_STATE: dict = {
     "user_profile": None,
@@ -46,6 +47,7 @@ class NereusGraph:
         checkpointer=None,
         interactive: bool = False,
     ) -> None:
+        provider = provider or build_llm_provider()
         self._coach_agent = coach or CoachAgent(provider=provider)
         self._tutor_agent = tutor or TutorAgent(provider=provider)
         self._examiner_agent = examiner or ExaminerAgent(provider=provider)

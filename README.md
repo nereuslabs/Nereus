@@ -12,21 +12,34 @@ Nereus построен как зацикленный автомат из трё
 
 ## Статус
 
-**Стадия:** прототипирование MVP (Шаг 1).
+**Стадия:** прототипирование MVP (Шаг 1 done, Шаг 2 in progress).
 
-На текущем этапе агенты представлены **mock-заглушками**, реализованы:
+На текущем этапе реализовано:
 - полный циклический граф LangGraph с условным роутингом (`PASS`/`RETRY`/`END`);
 - human-in-the-loop (интерактивный режим через `interrupt`);
-- автотесты (unit + integration);
-- CI на GitHub Actions (ruff + pytest);
+- **абстракция LLM-провайдера** (`LLMProvider`: `OllamaProvider` + `StubLLMProvider`); агенты генерируют Roadmap/материалы/оценки через модель, с fallback на детерминированные заглушки без сети;
+- автотесты (unit + integration); CI (ruff + pytest);
 - контейнеризация (Docker + Docker Compose).
 
 ## Стек
 
 - **Python 3.11+**, **LangGraph** — оркестрация агентной цепочки
-- **Ollama** — модели (в перспективе), **ChromaDB** — векторная БД и RAG (в перспективе)
+- **Ollama** (`/api/chat`, local / Cloud Free Tier) + **ChromaDB** (векторная БД и RAG, в перспективе)
 - **Chainlit** — UI (в перспективе)
 - **Docker + Docker Compose** — развёртывание
+
+## Конфигурация LLM
+
+По умолчанию используется `LLM_PROVIDER=stub` (без сети). Для реальной модели в `.env`:
+
+```bash
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=https://<your-ollama-host>
+OLLAMA_MODEL=gemma4:31b-cloud
+OLLAMA_API_KEY=...
+```
+
+После чего `python main.py` будет генерировать Roadmap, материалы и оценки через модель.
 
 ## Быстрый старт
 
@@ -56,8 +69,13 @@ src/nereus/
 │   ├── state.py     # Модели состояния и доменов
 │   ├── router.py    # Условные переходы автомата
 │   └── graph.py     # Сборка StateGraph (LangGraph)
-├── agents/          # Коуч / Тьютор / Экзаменатор (mock-заглушки)
+├── agents/          # Коуч / Тьютор / Экзаменатор (LLM + stub-fallback)
+├── llm/
+│   ├── base.py      # LLMProvider (абстракция)
+│   ├── ollama.py    # Native /api/chat клиент
+│   ├── stub.py      # In-memory провайдер (тесты/без сети)
+│   ├── schema.py    # Парсинг JSON из ответов модели
+│   └── factory.py   # Выбор провайдера по настройкам
 ├── db/              # ChromaDB (задел на будущее)
-├── llm/             # Ollama (задел на будущее)
 └── ui/              # Chainlit (задел на будущее)
 ```

@@ -42,12 +42,13 @@ class NereusGraph:
         coach: BaseAgent | None = None,
         tutor: BaseAgent | None = None,
         examiner: BaseAgent | None = None,
+        provider=None,
         checkpointer=None,
         interactive: bool = False,
     ) -> None:
-        self._coach_agent = coach or CoachAgent()
-        self._tutor_agent = tutor or TutorAgent()
-        self._examiner_agent = examiner or ExaminerAgent()
+        self._coach_agent = coach or CoachAgent(provider=provider)
+        self._tutor_agent = tutor or TutorAgent(provider=provider)
+        self._examiner_agent = examiner or ExaminerAgent(provider=provider)
         self._interactive = interactive
         self._graph = self._build(checkpointer)
 

@@ -66,6 +66,6 @@ class NereusState(TypedDict, total=False):
     retry_count: int
     max_retries: int
 
-    status: LearningStatus
+    status: str
 
     messages: Annotated[list, add_messages]

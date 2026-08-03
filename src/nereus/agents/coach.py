@@ -50,7 +50,7 @@ class CoachAgent(BaseAgent):
             "assessment": None,
             "material": "",
             "task": "",
-            "status": LearningStatus.LEARNING,
+            "status": LearningStatus.LEARNING.value,
         }
 
 

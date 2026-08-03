@@ -46,7 +46,7 @@ def main() -> None:
         task = interrupt.value["task"]
         print(f"\n[ Tutor ] {final['material']}")
         print(f"[ Examiner ] {task}")
-        answer = input("Your answer (type\"good\" to pass): ").strip()
+        answer = input('Your answer (type "good" to pass): ').strip()
         final = graph.invoke(Command(resume=answer), config)
 
     print("\n=== Roadmap completed! ===")

@@ -126,7 +126,7 @@ class NereusGraph:
     def app(self) -> StateGraph:
         return self._graph
 
-    def invoke(self, state: dict, config: dict | None = None) -> dict:
+    def invoke(self, state: object, config: dict | None = None) -> dict:
         if isinstance(state, dict):
             state = {**_DEFAULT_STATE, **state}
         if config:

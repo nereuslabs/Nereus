@@ -39,7 +39,7 @@ def test_failing_submission_terminates_via_max_retries(base_state) -> None:
 def test_retry_loop_reinvokes_examiner(base_state) -> None:
     calls: list[str] = []
 
-    def counting_evaluator(submission: str):
+    def counting_evaluator(submission, context=None):
         calls.append(submission)
         return 30.0, "Needs work.", ["fundamentals"]
 
@@ -49,6 +49,36 @@ def test_retry_loop_reinvokes_examiner(base_state) -> None:
 
     # 3 topics * (2 attempts + 1 forced) => examiner invoked more than once per topic
     assert len(calls) > 3
+
+
+def test_full_pipeline_with_llm_provider(base_state) -> None:
+    import json
+
+    from nereus.core.graph import NereusGraph
+    from nereus.llm.stub import StubLLMProvider
+
+    def responder(messages, **_):
+        system = messages[0]["content"]
+        if "roadmap" in system.lower() and "topics" in system:
+            return json.dumps(
+                {
+                    "topics": [
+                        {"id": "1", "title": "T1", "description": "d"},
+                        {"id": "2", "title": "T2", "description": "d"},
+                    ]
+                }
+            )
+        if "material" in system.lower() and "task" in system:
+            return json.dumps({"material": "mat", "task": "task"})
+        return json.dumps({"score": 95, "feedback": "ok", "weak_areas": []})
+
+    graph = NereusGraph(provider=StubLLMProvider(responder=responder))
+    final = graph.invoke({**_input(base_state["user_profile"]), "user_submission": "answer"})
+
+    assert len(final["roadmap"].topics) == 2
+    assert final["status"] == "completed"
+    assert final["assessment"].score == 95.0
+    assert final["material"] == "mat"
 
 
 def test_interactive_human_in_the_loop(base_state) -> None:

@@ -43,6 +43,15 @@ def test_tutor_generates_material_via_llm(roadmap, base_state) -> None:
     assert result["task"] == "llm task"
 
 
+def test_tutor_falls_back_when_llm_returns_bad_json(roadmap, base_state) -> None:
+    tutor = TutorAgent(provider=StubLLMProvider())
+    base_state["roadmap"] = roadmap
+    result = tutor.run(base_state)
+    topic = roadmap.topics[base_state["current_topic_index"]]
+    assert result["material"] == f"Material for '{topic.title}': {topic.description}"
+    assert result["task"] == f"Practical task: demonstrate mastery of '{topic.title}'."
+
+
 def test_examiner_llm_evaluator(roadmap, base_state) -> None:
     def responder(messages, **_):
         return json.dumps({"score": 88, "feedback": "nice", "weak_areas": []})

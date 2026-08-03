@@ -17,5 +17,6 @@ def build_llm_provider() -> LLMProvider:
             base_url=settings.ollama_base_url,
             model=settings.ollama_model,
             api_key=settings.ollama_api_key,
+            timeout=settings.ollama_timeout,
         )
     return StubLLMProvider()

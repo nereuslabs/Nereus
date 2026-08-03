@@ -16,8 +16,8 @@ def default_evaluator(submission: str) -> SubmissionCheck:
 
     Deterministic and dependency-free so the automaton can be tested before
     any real LLM integration exists. Word-boundary matching prevents
-    accidental matches like "not good" matching "good".
-    """
+    accidental matches like "goodness" matching "good".
+    "
     text = submission.lower()
     if re.search(r"\bgood\b", text):
         return 90.0, "Well done, topic mastered.", []

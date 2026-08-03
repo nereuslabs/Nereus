@@ -9,4 +9,6 @@ import chainlit as cl
 
 @cl.on_chat_start
 async def on_chat_start() -> None:
-    await cl.Message(content="Welcome to Nereus! The AI tutor will be available soon.").send()
+    await cl.Message(
+        content="Welcome to Nereus! The AI tutor will be available soon."
+    ).send()

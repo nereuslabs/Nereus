@@ -48,7 +48,7 @@ class TutorAgent(BaseAgent):
         return {
             "material": material,
             "task": task,
-            "status": LearningStatus.EXAMINING,
+            "status": LearningStatus.EXAMINING.value,
         }
 
 

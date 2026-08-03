@@ -109,8 +109,16 @@ class TutorAgent(BaseAgent):
                     "task": task,
                     "status": LearningStatus.EXAMINING.value,
                 }
-            except Exception:
-                pass
+            except (KeyError, TypeError, ValueError):
+                return {
+                    "material": (
+                        self._revision_material(state)
+                        if retrying
+                        else self._topic_material(topic)
+                    ),
+                    "task": self._task_for(topic),
+                    "status": LearningStatus.EXAMINING.value,
+                }
 
         material = self._revision_material(state) if retrying else self._topic_material(topic)
         task = self._task_for(topic)

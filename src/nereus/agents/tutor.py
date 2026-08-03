@@ -85,8 +85,11 @@ class TutorAgent(BaseAgent):
             temperature=0.4,
             json_mode=True,
         )
-        data = extract_json(raw)
-        return str(data["material"]), str(data["task"])
+        try:
+            data = extract_json(raw)
+            return str(data["material"]), str(data["task"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise _InvalidTutorResponseError from exc
 
     # ------------------------------------------------------------------ #
     # Agent interface
@@ -109,7 +112,7 @@ class TutorAgent(BaseAgent):
                     "task": task,
                     "status": LearningStatus.EXAMINING.value,
                 }
-            except (KeyError, TypeError, ValueError):
+            except _InvalidTutorResponseError:
                 return {
                     "material": (
                         self._revision_material(state)
@@ -131,3 +134,7 @@ class TutorAgent(BaseAgent):
 
 class MockTutorAgent(TutorAgent):
     """Identical to TutorAgent; exists to make the mock nature explicit."""
+
+
+class _InvalidTutorResponseError(Exception):
+    pass

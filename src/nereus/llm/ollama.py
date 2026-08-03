@@ -27,6 +27,7 @@ class OllamaProvider(LLMProvider):
         self._model = model
         self._api_key = api_key
         self._timeout = timeout
+        self._owns_client = client is None
         self._client = client or httpx.Client(timeout=timeout)
 
     def _headers(self) -> dict[str, str]:

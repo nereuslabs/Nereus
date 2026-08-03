@@ -1,0 +1,45 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: nereus-app
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      - ollama
+      - chromadb
+    networks:
+      - nereus-net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: nereus-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - nereus-net
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: nereus-chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - nereus-net
+
+volumes:
+  ollama_data:
+  chroma_data:
+
+networks:
+  nereus-net:
+    driver: bridge

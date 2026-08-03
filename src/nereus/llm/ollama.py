@@ -67,4 +67,5 @@ class OllamaProvider(LLMProvider):
         return str(data["message"]["content"])
 
     def close(self) -> None:
-        self._client.close()
+        if self._owns_client:
+            self._client.close()

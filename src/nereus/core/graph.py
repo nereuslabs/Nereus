@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Mapping
+
 from langgraph.graph import END, StateGraph
 from langgraph.types import interrupt
 
@@ -9,7 +11,8 @@ from nereus.agents.examiner import ExaminerAgent
 from nereus.agents.tutor import TutorAgent
 from nereus.core.router import ADVANCE_TUTOR, RETRY_TUTOR, route_after_exam
 from nereus.core.state import Assessment, NereusState, Roadmap, Verdict
-from nereus.llm.factory import build_llm_provider
+from nereus.llm.base import LLMProvider
+from nereus.llm.inference import StructuredInferenceClient
 
 _DEFAULT_STATE: dict = {
     "user_profile": None,
@@ -22,6 +25,8 @@ _DEFAULT_STATE: dict = {
     "retry_count": 0,
     "max_retries": 2,
     "status": "coaching",
+    "session": None,
+    "session_brief": "",
     "messages": [],
 }
 
@@ -43,14 +48,18 @@ class NereusGraph:
         coach: BaseAgent | None = None,
         tutor: BaseAgent | None = None,
         examiner: BaseAgent | None = None,
-        provider=None,
+        provider: LLMProvider | None = None,
+        inference: StructuredInferenceClient | None = None,
         checkpointer=None,
         interactive: bool = False,
     ) -> None:
-        provider = provider or build_llm_provider()
-        self._coach_agent = coach or CoachAgent(provider=provider)
-        self._tutor_agent = tutor or TutorAgent(provider=provider)
-        self._examiner_agent = examiner or ExaminerAgent(provider=provider)
+        inference = inference or (StructuredInferenceClient(provider) if provider else None)
+        self._coach_agent = coach or CoachAgent(inference=inference, provider=provider)
+        self._tutor_agent = tutor or TutorAgent(inference=inference, provider=provider)
+        self._examiner_agent = examiner or ExaminerAgent(
+            inference=inference, provider=provider
+        )
+        self._inference = inference
         self._interactive = interactive
         self._graph = self._build(checkpointer)
 
@@ -129,9 +138,29 @@ class NereusGraph:
     def app(self) -> StateGraph:
         return self._graph
 
+    def trim_context(self, state: Mapping[str, object]) -> dict:
+        """Bound the checkpointer-bound message history to the token limit.
+
+        Uses LLM summarisation when an inference client is wired, otherwise
+        hard-truncates. Purely on the returned ``messages``; does not mutate
+        domain fields. """
+        from nereus.config.settings import settings
+        from nereus.core.context import summarize_history
+
+        messages = list(state.get("messages", []))
+        if not messages:
+            return {}
+        trimmed = summarize_history(messages, self._inference, settings.context_max_tokens)
+        return {"messages": trimmed}
+
     def invoke(self, state: object, config: dict | None = None) -> dict:
         if isinstance(state, dict):
             state = {**_DEFAULT_STATE, **state}
         if config:
-            return self._graph.invoke(state, config=config)
-        return self._graph.invoke(state)
+            final = self._graph.invoke(state, config=config)
+        else:
+            final = self._graph.invoke(state)
+        # Bound the persisted message history (keeps checkpointer payloads sane).
+        if isinstance(final, dict) and final.get("messages"):
+            final.update(self.trim_context(final))
+        return final

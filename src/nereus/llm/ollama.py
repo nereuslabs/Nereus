@@ -30,6 +30,18 @@ class OllamaProvider(LLMProvider):
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=timeout)
 
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    @property
+    def timeout(self) -> float:
+        return self._timeout
+
     def _headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self._api_key:

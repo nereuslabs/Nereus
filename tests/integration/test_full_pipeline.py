@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
 from nereus.agents.examiner import ExaminerAgent
+from nereus.core.factory import build_nereus_graph
 from nereus.core.graph import NereusGraph
 from nereus.core.state import Verdict
 
@@ -54,12 +54,17 @@ def test_retry_loop_reinvokes_examiner(base_state) -> None:
 def test_full_pipeline_with_llm_provider(base_state) -> None:
     import json
 
-    from nereus.core.graph import NereusGraph
     from nereus.llm.stub import StubLLMProvider
 
     def responder(messages, **_):
-        system = messages[0]["content"]
-        if "roadmap" in system.lower() and "topics" in system:
+        # Discriminate by the role-defining user message, not by system keywords
+        # (the SESSION CONTEXT brief may legitimately contain "roadmap"/"topics").
+        user_content = ""
+        for msg in messages:
+            if msg.get("role") == "user":
+                user_content = str(msg.get("content", ""))
+                break
+        if "build a roadmap" in user_content.lower():
             return json.dumps(
                 {
                     "topics": [
@@ -68,7 +73,7 @@ def test_full_pipeline_with_llm_provider(base_state) -> None:
                     ]
                 }
             )
-        if "material" in system.lower() and "task" in system:
+        if "topic title" in user_content.lower():
             return json.dumps({"material": "mat", "task": "task"})
         return json.dumps({"score": 95, "feedback": "ok", "weak_areas": []})
 
@@ -82,7 +87,7 @@ def test_full_pipeline_with_llm_provider(base_state) -> None:
 
 
 def test_interactive_human_in_the_loop(base_state) -> None:
-    graph = NereusGraph(checkpointer=MemorySaver(), interactive=True)
+    graph = build_nereus_graph(interactive=True)
     config = {"configurable": {"thread_id": "test-thread"}}
 
     final = graph.invoke(_input(base_state["user_profile"]), config)

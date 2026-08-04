@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     chromadb_host: str = "localhost"
     chromadb_port: int = 8000
 
+    # Approximate max tokens for the in-memory message history window.
+    context_max_tokens: int = 8000
+
     def chromadb_url(self) -> str:
         return f"http://{self.chromadb_host}:{self.chromadb_port}"
 

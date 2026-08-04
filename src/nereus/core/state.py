@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Optional, TypedDict
+from typing import Annotated, Any, Optional, TypedDict
 
 from langgraph.graph import add_messages
 from pydantic import BaseModel, Field
@@ -67,5 +67,9 @@ class NereusState(TypedDict, total=False):
     max_retries: int
 
     status: str
+
+    # Aggregated session context (filled in by agents, see core/session.py).
+    session: Optional[Any]
+    session_brief: str
 
     messages: Annotated[list, add_messages]

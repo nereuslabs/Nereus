@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any, TypeVar
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -84,9 +84,9 @@ class MaterialOutput(BaseModel):
 
 
 class AssessmentOutput(BaseModel):
-    score: float
+    score: float = Field(ge=0.0, le=100.0)
     feedback: str
-    weak_areas: list[str] = []
+    weak_areas: list[str] = Field(default_factory=list)
 
 
 class SummaryOutput(BaseModel):

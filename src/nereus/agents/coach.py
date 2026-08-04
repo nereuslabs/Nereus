@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from pydantic import BaseModel
@@ -28,6 +29,8 @@ class CoachAgent(BaseAgent):
     bounded retries; otherwise a deterministic stub roadmap is used so the
     automaton keeps working offline.
     """
+
+    logger = logging.getLogger("nereus.agents.coach")
 
     def __init__(
         self,
@@ -86,7 +89,11 @@ class CoachAgent(BaseAgent):
             if not topics:
                 return self.build_roadmap(profile)
             return Roadmap(topics=topics)
-        except Exception:
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning(
+                "LLM roadmap generation failed (%s); falling back to stub roadmap.",
+                type(exc).__name__,
+            )
             return self.build_roadmap(profile)
 
     # ------------------------------------------------------------------ #

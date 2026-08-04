@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from pydantic import BaseModel
@@ -18,9 +19,7 @@ from nereus.llm.params import AgentRole
 from nereus.llm.prompts import build_tutor_prompt
 from nereus.llm.schema import MaterialOutput
 
-
-class _InvalidTutorResponseError(Exception):
-    pass
+logger = logging.getLogger("nereus.agents.tutor")
 
 
 class TutorAgent(BaseAgent):
@@ -72,8 +71,6 @@ class TutorAgent(BaseAgent):
         weak_areas: list[str],
         session=None,
     ) -> tuple[str, str]:
-        if self._inference is None:
-            raise _InvalidTutorResponseError("no inference client")
         messages = build_tutor_prompt(
             topic, revision=revision, weak_areas=weak_areas, session=session
         )
@@ -110,6 +107,9 @@ class TutorAgent(BaseAgent):
                 return self._with_session(state, result)
             except LLMOutputError:
                 # model did not produce valid schema -> deterministic fallback
+                logger.warning(
+                    "LLM material generation failed; falling back to stub material."
+                )
                 pass
 
         material = self._revision_material(state) if retrying else self._topic_material(topic)

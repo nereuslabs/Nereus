@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, Callable, Optional
 
@@ -10,6 +11,8 @@ from nereus.llm.inference import LLMOutputError, StructuredInferenceClient
 from nereus.llm.params import AgentRole
 from nereus.llm.prompts import build_examiner_prompt
 from nereus.llm.schema import AssessmentOutput
+
+logger = logging.getLogger("nereus.agents.examiner")
 
 # score (0-100), feedback, weak areas
 SubmissionCheck = tuple[float, str, list[str]]
@@ -63,6 +66,9 @@ class LLMEvaluator:
             )
             return float(result.score), str(result.feedback), list(result.weak_areas)
         except LLMOutputError:
+            logger.warning(
+                "LLM evaluation failed; falling back to deterministic evaluator."
+            )
             return default_evaluator(submission, context)
 
 

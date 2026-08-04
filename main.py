@@ -7,10 +7,11 @@ whole roadmap is completed.
 
 from __future__ import annotations
 
-from langgraph.checkpoint.memory import MemorySaver
+import logging
+
 from langgraph.types import Command
 
-from nereus.core.graph import NereusGraph
+from nereus.core.factory import build_nereus_graph
 from nereus.core.state import UserLevel, UserProfile
 
 INTERRUPT_KEY = "__interrupt__"
@@ -35,8 +36,20 @@ def build_profile() -> UserProfile:
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s | %(message)s",
+    )
+    logger = logging.getLogger("nereus")
+
     profile = build_profile()
-    graph = NereusGraph(checkpointer=MemorySaver(), interactive=True)
+    logger.info(
+        "starting run | skill=%r goal=%r target=%s",
+        profile.skill,
+        profile.goal,
+        profile.target_level,
+    )
+    graph = build_nereus_graph(interactive=True)
     config = {"configurable": {"thread_id": "nereus-demo"}}
 
     final = graph.invoke({"user_profile": profile}, config)

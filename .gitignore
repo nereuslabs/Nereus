@@ -44,3 +44,6 @@ htmlcov/
 .chroma/
 chroma_db/
 ollama_data/
+
+# Eval harness + live-test traces
+artifacts/

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Mapping
 
 from pydantic import BaseModel, Field
@@ -153,3 +154,18 @@ class LearningSession(BaseModel):
             last_task=last_task or "",
             last_submission=last_submission,
         )
+
+    # ------------------------------------------------------------------ #
+    # Persistence (#6, Step 4)                                          #
+    def dump(self, path: str | Path, *, indent: int = 2) -> None:
+        """Serialize the session to ``path`` as JSON (UTF-8).
+
+        Used to checkpoint/restore a learning session between CLI runs so RAG
+        progress is not lost on exit.
+        """
+        Path(path).write_text(self.model_dump_json(indent=indent), encoding="utf-8")
+
+    @classmethod
+    def load(cls, path: str | Path) -> "LearningSession":
+        """Load a session previously written by :meth:`dump`."""
+        return cls.model_validate_json(Path(path).read_text(encoding="utf-8"))

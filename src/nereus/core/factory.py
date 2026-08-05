@@ -8,6 +8,7 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from nereus.core.graph import NereusGraph
 from nereus.llm.base import LLMProvider
 from nereus.llm.factory import build_llm_provider
+from nereus.llm.retriever import Retriever
 
 logger = logging.getLogger("nereus")
 
@@ -22,6 +23,7 @@ _ALLOWED_MSGPCK = [
     ("nereus.core.state", "Verdict"),
     ("nereus.core.state", "UserLevel"),
     ("nereus.core.state", "LearningStatus"),
+    ("nereus.core.state", "RetrievedChunk"),
     ("nereus.core.session", "LearningSession"),
 ]
 
@@ -54,6 +56,7 @@ def build_nereus_graph(
     coach=None,
     tutor=None,
     examiner=None,
+    retriever: Retriever | None = None,
 ) -> NereusGraph:
     """Centralized factory for a :class:`NereusGraph`.
 
@@ -82,11 +85,19 @@ def build_nereus_graph(
             )
 
     resolved_checkpointer = checkpointer if checkpointer is not None else _DEFAULT_CHECKPOINTER
-    return NereusGraph(
+    graph = NereusGraph(
         provider=provider,
         coach=coach,
         tutor=tutor,
         examiner=examiner,
+        retriever=retriever,
         checkpointer=resolved_checkpointer,
         interactive=interactive,
     )
+    logger.info(
+        "Nereus graph ready; retriever=%s",
+        type(graph._retriever).__name__
+        if getattr(graph, "_retriever", None) is not None
+        else "n/a",
+    )
+    return graph

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from nereus.core.state import RoadmapTopic
+from nereus.core.state import RetrievedChunk, RoadmapTopic
 from nereus.llm.params import AgentRole
 
 SESSION_PREAMBLE = "SESSION CONTEXT — use this to keep every answer grounded:"
@@ -94,12 +94,20 @@ def build_examiner_prompt(
     submission: str,
     *,
     session: Any | None = None,
+    retrieved: Sequence[RetrievedChunk] | None = None,
 ) -> list[dict[str, str]]:
     system = _system(AgentRole.EXAMINER)
     brief = _brief(session)
     if brief:
         system = f"{SESSION_PREAMBLE}\n{brief}\n\n{system}"
-    user = f"Topic: {topic_title}\nTask: {task}\n\nStudent's answer: {submission}"
+    user = f"Topic: {topic_title}\nTask: {task}"
+    if retrieved:
+        context_block = "\n".join(
+            f"- {chunk.content[:300]} (relevance {chunk.score:.2f})"
+            for chunk in retrieved
+        )
+        user += f"\n\n[Retrieved context]\n{context_block}"
+    user += f"\n\nStudent's answer: {submission}"
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": user},

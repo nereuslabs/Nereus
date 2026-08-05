@@ -13,6 +13,7 @@ from nereus.core.router import ADVANCE_TUTOR, RETRY_TUTOR, route_after_exam
 from nereus.core.state import Assessment, NereusState, Roadmap, Verdict
 from nereus.llm.base import LLMProvider
 from nereus.llm.inference import StructuredInferenceClient
+from nereus.llm.retriever import Retriever, StubRetriever
 
 _DEFAULT_STATE: dict = {
     "user_profile": None,
@@ -27,8 +28,23 @@ _DEFAULT_STATE: dict = {
     "status": "coaching",
     "session": None,
     "session_brief": "",
+    "retrieved_chunks": None,
     "messages": [],
 }
+
+
+def _default_retriever() -> Retriever:
+    """Build the default retriever from settings (stub by default -> offline)."""
+    from nereus.config.settings import settings
+
+    if settings.embedding_provider == "stub":
+        return StubRetriever()
+    from nereus.db.chroma import ChromaStore
+    from nereus.llm.embed import build_embedder
+    from nereus.llm.retriever import ChromaRetriever
+
+    store = ChromaStore(host=settings.chromadb_host, port=settings.chromadb_port)
+    return ChromaRetriever(store=store, embedder=build_embedder())
 
 
 class NereusGraph:
@@ -50,6 +66,7 @@ class NereusGraph:
         examiner: BaseAgent | None = None,
         provider: LLMProvider | None = None,
         inference: StructuredInferenceClient | None = None,
+        retriever: Retriever | None = None,
         checkpointer=None,
         interactive: bool = False,
     ) -> None:
@@ -60,6 +77,9 @@ class NereusGraph:
             inference=inference, provider=provider
         )
         self._inference = inference
+        self._retriever: Retriever | None = (
+            retriever if retriever is not None else _default_retriever()
+        )
         self._interactive = interactive
         self._graph = self._build(checkpointer)
 
@@ -103,11 +123,33 @@ class NereusGraph:
     def _complete(self, state: NereusState) -> dict:
         return {"status": "completed"}
 
+    def _retrieve(self, state: NereusState) -> dict:
+        """Run the RAG retriever for the current topic and store chunks.
+
+        Offline-first: if no retriever is configured (or the topic is not yet
+        known) the node emits an empty update so the rest of the graph is
+        unaffected.
+        """
+        if self._retriever is None:
+            return {}
+        try:
+            topic = state["roadmap"].topics[state["current_topic_index"]]
+        except (KeyError, IndexError, AttributeError, TypeError):
+            return {"retrieved_chunks": None}
+        from nereus.config.settings import settings
+
+        query = state.get("session_brief") or state.get("task") or ""
+        chunks = self._retriever.retrieve(
+            query=query, topic=topic, top_k=settings.retriever_top_k
+        )
+        return {"retrieved_chunks": chunks}
+
     def _build(self, checkpointer) -> StateGraph:
         builder = StateGraph(NereusState)
 
         builder.add_node("coach", self._coach_agent.run)
         builder.add_node("tutor_new", self._tutor_new)
+        builder.add_node("retrieve", self._retrieve)
         builder.add_node("tutor_retry", self._tutor_retry)
         builder.add_node("tutor_advance", self._tutor_advance)
         builder.add_node("examiner", self._examiner)
@@ -115,7 +157,8 @@ class NereusGraph:
 
         builder.set_entry_point("coach")
         builder.add_edge("coach", "tutor_new")
-        builder.add_edge("tutor_new", "examiner")
+        builder.add_edge("tutor_new", "retrieve")
+        builder.add_edge("retrieve", "examiner")
         builder.add_edge("tutor_retry", "examiner")
         builder.add_edge("tutor_advance", "examiner")
         builder.add_edge("complete", END)

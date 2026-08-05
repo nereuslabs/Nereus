@@ -24,6 +24,34 @@ services:
     networks:
       - nereus-net
 
+  ui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: nereus-ui
+    command: chainlit run src/nereus/ui/app.py --host 0.0.0.0 --port 7457
+    environment:
+      - ENV=development
+      - LOG_LEVEL=INFO
+      - LLM_PROVIDER=${LLM_PROVIDER:-stub}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=gemma4:31b-cloud
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-stub}
+      - RETRIEVER_TOP_K=5
+      - CONTEXT_MAX_TOKENS=8000
+    volumes:
+      - ./src:/app/src
+    ports:
+      - "7457:7457"
+    depends_on:
+      - ollama
+      - chromadb
+    networks:
+      - nereus-net
+
   ollama:
     image: ollama/ollama:latest
     container_name: nereus-ollama

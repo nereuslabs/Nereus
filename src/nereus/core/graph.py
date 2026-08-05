@@ -217,3 +217,15 @@ class NereusGraph:
         if isinstance(final, dict) and final.get("messages"):
             final.update(self.trim_context(final))
         return final
+
+    async def astream(self, state: object, config: dict | None = None, stream_mode: str = "values"):
+        """Async streaming wrapper mirroring :meth:`invoke`.
+
+        Yields the merged state after each node so the UI can render coach /
+        tutor / examiner / assessment progressively and pause on ``interrupt``.
+        """
+        if isinstance(state, dict):
+            state = {**_DEFAULT_STATE, **state}
+        args = (state, config) if config else (state,)
+        async for chunk in self._graph.astream(*args, stream_mode=stream_mode):
+            yield chunk

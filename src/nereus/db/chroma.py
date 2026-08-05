@@ -1,63 +1,105 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Sequence
 
 logger = logging.getLogger("nereus.db.chroma")
 
 
 class ChromaStore:
-    """Thin adapter over a ChromaDB server for RAG over learning material.
+    """Thin adapter over a ChromaDB HTTP server for the RAG store.
 
-    Step 4 scaffold. Constructed with host/port (mirroring ``settings``);
-    methods are stubs that raise ``NotImplementedError`` until the full RAG
-    wiring lands. ``chromadb`` is imported lazily so the import graph stays
-    light and offline tests are unaffected.
+    The real ``chromadb`` client is imported lazily so the module (and the
+    ``ChromaRetriever`` that wraps it) stays importable in offline/CI
+    environments; ``connect()`` raises only when actually used without a server.
     """
 
-    def __init__(self, host: str = "localhost", port: int = 8000) -> None:
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 8000,
+        *,
+        collection: str = "nereus",
+    ) -> None:
         self._host = host
         self._port = port
+        self._collection = collection
         self._client: Any = None
 
     @property
     def endpoint(self) -> str:
         return f"http://{self._host}:{self._port}"
 
-    def connect(self) -> None:
+    def connect(self) -> Any:
+        """Lazily build (and cache) the ``chromadb`` HTTP client."""
+        if self._client is not None:
+            return self._client
         try:
-            import chromadb  # noqa: F401
+            import chromadb  # type: ignore
         except Exception as exc:  # noqa: BLE001
             logger.warning("chromadb backend unavailable: %s", exc)
-            return
-        self._client = self._build_client()
+            raise
+        self._client = chromadb.HttpClient(host=self._host, port=self._port)
+        return self._client
 
-    def _build_client(self) -> Any:
-        import chromadb
-
-        return chromadb.HttpClient(host=self._host, port=self._port)
+    def _collection(self) -> Any:
+        return self.connect().get_or_create_collection(name=self._collection)
 
     def add_documents(
-        self, collection: str, documents: list[str], embeddings: list[list[float]]
+        self,
+        documents: Sequence[str],
+        embeddings: Sequence[Sequence[float]],
+        *,
+        ids: Sequence[str] | None = None,
+        metadatas: Sequence[dict[str, Any]] | None = None,
     ) -> list[str]:
+        """Upsert documents together with their pre-computed embeddings."""
         if self._client is None:
             raise NotImplementedError("ChromaStore.connect() first")
-        col = self._client.get_or_create_collection(name=collection)
-        ids = [f"{collection}-{i}" for i in range(len(documents))]
-        col.add(ids=ids, embeddings=embeddings, documents=documents)
-        return ids
+        embeddings = [list(e) for e in embeddings]
+        if ids is None:
+            ids = [f"doc-{i}" for i in range(len(documents))]
+        if metadatas is None:
+            metadatas = [{} for _ in documents]
+        col = self._collection()
+        col.upsert(
+            ids=list(ids),
+            embeddings=embeddings,
+            documents=list(documents),
+            metadatas=list(metadatas),
+        )
+        return list(ids)
 
-    def search(self, collection: str, query: str, *, top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_embedding: Sequence[float],
+        *,
+        top_k: int = 5,
+        where: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return the nearest documents for a query embedding vector.
+
+        ``where`` filters documents by metadata (e.g. ``{"topic_id": "1"}``).
+        """
         if self._client is None:
             raise NotImplementedError("ChromaStore.connect() first")
-        col = self._client.get_collection(name=collection)
-        results = col.query(query_texts=[query], n_results=top_k)
-        return [
-            {"id": rid, "score": float(dist), "content": doc}
-            for rid, dist, doc in zip(
-                results["ids"][0],
-                results["distances"][0],
-                results["documents"][0],
-                strict=True,
+        col = self._collection()
+        kwargs: dict[str, Any] = {"query_embeddings": [list(query_embedding)], "n_results": top_k}
+        if where is not None:
+            kwargs["where"] = where
+        results = col.query(include=["documents", "metadatas", "distances"], **kwargs)
+        ids = results.get("ids", [[]])[0]
+        docs = results.get("documents", [[]])[0]
+        dists = results.get("distances", [[]])[0]
+        metas = results.get("metadatas", [[]])[0]
+        out: list[dict[str, Any]] = []
+        for idx, doc in enumerate(docs):
+            out.append(
+                {
+                    "id": ids[idx] if idx < len(ids) else None,
+                    "content": doc,
+                    "score": float(1.0 - (dists[idx] if idx < len(dists) else 0.0)),
+                    "metadata": metas[idx] if idx < len(metas) else {},
+                }
             )
-        ]
+        return out

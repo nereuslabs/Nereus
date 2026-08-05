@@ -16,6 +16,7 @@ import logging
 from langgraph.types import Command
 
 from nereus.core.factory import build_nereus_graph
+from nereus.core.persistence import build_checkpointer
 from nereus.core.state import UserLevel, UserProfile
 
 INTERRUPT_KEY = "__interrupt__"
@@ -70,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         config = {"configurable": {"thread_id": args.resume}}
         # no profile prompt; load existing state from checkpoint
         initial_state: dict = {}
+        logger.info("resuming session | thread_id=%s", args.resume)
     else:
         profile = build_profile()
         logger.info(
@@ -78,15 +80,14 @@ def main(argv: list[str] | None = None) -> int:
             profile.goal,
             profile.target_level,
         )
-        graph = build_nereus_graph(
-            interactive=True, checkpoint=args.checkpoint_backend
-        )
         config = {"configurable": {"thread_id": "nereus-demo"}}
         initial_state = {"user_profile": profile}
 
-    graph = build_nereus_graph(
-        interactive=True, checkpoint=args.checkpoint_backend
+    backend = args.checkpoint_backend
+    checkpointer = (
+        build_checkpointer(backend) if backend else build_checkpointer()
     )
+    graph = build_nereus_graph(interactive=True, checkpointer=checkpointer)
 
     final = graph.invoke(initial_state, config)
 

@@ -48,7 +48,10 @@ def _sqlite(serde: Any | None = None) -> Any:
 
     path = settings.checkpoint_db
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path))
+    # LangGraph executes graph nodes in a thread pool — the connection must
+    # therefore be shareable across threads (check_same_thread=False) and the
+    # saver serializes writes internally via its own lock.
+    conn = sqlite3.connect(str(path), check_same_thread=False)
     return SqliteSaver(conn, serde=serde)
 
 

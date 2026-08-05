@@ -94,13 +94,36 @@ NEREUS_RUN_LIVE=1 LLM_PROVIDER=ollama OLLAMA_MODEL=gemma4:31b-cloud pytest -m "n
 ## Быстрый старт
 
 ```bash
-# Локальный запуск прототипа
+# Локальный запуск: CLI‑прототип (human-in-the-loop через input)
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 python main.py
 
-# Через Docker
-docker compose up -d --build
+# Web UI на базе Chainlit (по умолчанию LLM_PROVIDER=stub — офлайн)
+pip install -e ".[dev]"
+chainlit run src/nereus/ui/app.py
+
+# Через Docker (сервис nereus-ui на http://localhost:7457)
+docker compose up -d --build ui
+```
+
+### Web UI (Chainlit)
+
+`src/nereus/ui/app.py` — диалоговый web‑клиент: собирает профиль, стримит roadmap →
+material → assessment, задаёт вопросы экзаменатора и возобновляет граф через
+`Command(resume=...)`. Поддерживает офлайн‑режим (`LLM_PROVIDER=stub`) и реальную
+модель Ollama. Состояние сессии (material, retrieved_chunks, assessment) рендерится
+по‑шагово; `thread_id` хранится в `cl.user_session` для cross‑restart resume
+(требует persistent checkpointer — см. issue #16).
+
+```bash
+# офлайн‑демо
+chainlit run src/nereus/ui/app.py
+
+# с Ollama + ChromaDB
+LLM_PROVIDER=ollama OLLAMA_BASE_URL=http://localhost:11434 \
+  EMBEDDING_PROVIDER=sentence_transformers CHROMADB_HOST=localhost \
+  chainlit run src/nereus/ui/app.py
 ```
 
 ## Тесты и линтер

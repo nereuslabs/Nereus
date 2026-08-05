@@ -67,6 +67,30 @@ CHROMADB_HOST=localhost
 CHROMADB_PORT=8000
 ```
 
+### Параметры persistence (чекпоинтер)
+
+Граф использует LangGraph checkpointer для сохранения состояния state между
+паузами (interrupt) и перезапусками. По умолчанию — in-memory `MemorySaver`,
+чтобы CI оставалась offline.
+
+```bash
+# включить SQLite (local file) или Redis (shared)
+CHECKPOINTER=sqlite
+CHECKPOINT_DB=.checkpoints/nereus.sqlite3   # путь к файлу БД
+# или
+CHECKPOINTER=redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+```
+
+CLI поддерживает `--resume <thread_id>`:
+
+```bash
+python main.py --resume <thread_id>
+```
+
+Для образования см. issue #16 (persistent checkpointer).
+
 После чего `python main.py` будет генерировать Roadmap, материалы и оценки через модель.
 
 ### Оценка цепочки (harness)
@@ -144,8 +168,9 @@ src/nereus/
 │   ├── router.py          # условные переходы автомата (route_after_exam)
 │   ├── graph.py           # сборка StateGraph + trim_context; retrieval в tutor_*
 │   ├── factory.py         # build_nereus_graph — централизованная сборка + наблюдаемость
+│   ├── persistence.py     # build_checkpointer (memory/sqlite/redis), msgpack allowlist
 │   ├── session.py         # LearningSession (агрегация прогресса/слабых мест, dump/load)
-│   ├── context.py         # truncate_messages / summarize_history (RLHF‑ready)
+│   └── context.py         # truncate_messages / summarize_history (RLHF‑ready)
 │   └── db/
 │       └── chroma.py      # ChromaStore (upsert/search по темам)
 ├── agents/                # Coach / Tutor / Examiner (структурный inference + stub fallback)
@@ -160,5 +185,5 @@ src/nereus/
 │   ├── factory.py         # build_llm_provider (stub | ollama)
 │   ├── embed.py           # Embedder (stub | sentence_transformers | ollama)
 │   └── retriever.py       # Retriever (stub | ChromaRetriever) + RetrievedChunk
-└── ui/app.py              # Chainlit app (placeholder, Шаг 5)
+└── ui/app.py              # Chainlit Web UI driver (Step 5)
 ```

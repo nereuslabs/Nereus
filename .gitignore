@@ -47,3 +47,4 @@ ollama_data/
 
 # Eval harness + live-test traces
 artifacts/
+.checkpoints/

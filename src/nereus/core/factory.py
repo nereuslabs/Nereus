@@ -2,38 +2,13 @@ from __future__ import annotations
 
 import logging
 
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
-
 from nereus.core.graph import NereusGraph
+from nereus.core.persistence import build_checkpointer
 from nereus.llm.base import LLMProvider
 from nereus.llm.factory import build_llm_provider
 from nereus.llm.retriever import Retriever
 
 logger = logging.getLogger("nereus")
-
-# Pydantic models / enums stored in NereusState must be allow-listed for
-# LangGraph's msgpack checkpointer (avoids warnings and is forward-compatible
-# with LANGGRAPH_STRICT_MSGPACK=true).
-_ALLOWED_MSGPCK = [
-    ("nereus.core.state", "UserProfile"),
-    ("nereus.core.state", "Roadmap"),
-    ("nereus.core.state", "RoadmapTopic"),
-    ("nereus.core.state", "Assessment"),
-    ("nereus.core.state", "Verdict"),
-    ("nereus.core.state", "UserLevel"),
-    ("nereus.core.state", "LearningStatus"),
-    ("nereus.core.state", "RetrievedChunk"),
-    ("nereus.core.session", "LearningSession"),
-]
-
-
-def _default_checkpointer() -> MemorySaver:
-    serde = JsonPlusSerializer(allowed_msgpack_modules=_ALLOWED_MSGPCK)
-    return MemorySaver(serde=serde)
-
-
-_DEFAULT_CHECKPOINTER = _default_checkpointer()
 
 
 def _provider_info(provider: LLMProvider) -> str:
@@ -84,7 +59,7 @@ def build_nereus_graph(
                 exc,
             )
 
-    resolved_checkpointer = checkpointer if checkpointer is not None else _DEFAULT_CHECKPOINTER
+    resolved_checkpointer = checkpointer if checkpointer is not None else build_checkpointer()
     graph = NereusGraph(
         provider=provider,
         coach=coach,
@@ -94,10 +69,13 @@ def build_nereus_graph(
         checkpointer=resolved_checkpointer,
         interactive=interactive,
     )
+    from nereus.config.settings import settings
+
     logger.info(
-        "Nereus graph ready; retriever=%s",
+        "Nereus graph ready; retriever=%s checkpointer=%s",
         type(graph._retriever).__name__
         if getattr(graph, "_retriever", None) is not None
         else "n/a",
+        settings.checkpoint_backend,
     )
     return graph

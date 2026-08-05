@@ -29,6 +29,17 @@ class Settings(BaseSettings):
     ollama_embed_model: str = "nomic-embed-text"
     retriever_top_k: int = 5
 
+    # --- Persistence / checkpointer (Step 4+, issue #16) ---
+    checkpoint_backend: str = "memory"  # "memory" | "sqlite" | "redis"
+    checkpoint_db: str = ".checkpoints/nereus.sqlite3"
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    checkpoint_ttl_seconds: int = 0  # 0 = no TTL
+
+    @property
+    def redis_url(self) -> str:
+        return f"redis://{self.redis_host}:{self.redis_port}/0"
+
     def chromadb_url(self) -> str:
         return f"http://{self.chromadb_host}:{self.chromadb_port}"
 

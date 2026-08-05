@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     # Approximate max tokens for the in-memory message history window.
     context_max_tokens: int = 8000
 
+    # --- RAG / embeddings (Step 4) ---
+    embedding_provider: str = "stub"  # "stub" | "sentence_transformers" | "ollama"
+    sentence_transformers_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    ollama_embed_model: str = "nomic-embed-text"
+    retriever_top_k: int = 5
+
     def chromadb_url(self) -> str:
         return f"http://{self.chromadb_host}:{self.chromadb_port}"
 

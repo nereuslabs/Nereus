@@ -50,9 +50,14 @@ def _default_retriever() -> Retriever:
 class NereusGraph:
     """Assembles the Nereus learning automaton as a LangGraph ``StateGraph``.
 
-    Node flow::
+        Node flow::
 
-        START -> coach -> tutor_new -> examiner -> router -> (tutor_retry | tutor_advance | END)
+        START -> coach -> tutor_new -> examiner -> router -> (
+            tutor_retry -> examiner | tutor_advance -> examiner | END
+        )
+
+        Each tutor node enriches state with `retrieved_chunks` (RAG) before the
+        examiner runs.
 
     When ``interactive`` is enabled the examiner node pauses on ``interrupt()``
     waiting for the human's answer (human-in-the-loop). Compiling with a
@@ -89,19 +94,47 @@ class NereusGraph:
             "retry_count": 0,
         }
 
+    def _retrieve_chunks(self, state: NereusState) -> list:
+        """Fetch RAG chunks for the current topic (pre-exam enrichment).
+
+        Returns an empty list when no retriever is configured or the topic is
+        not yet known, leaving the rest of the graph unaffected (offline-first).
+        """
+        retriever = self._retriever
+        if retriever is None:
+            return []
+        try:
+            topic = state["roadmap"].topics[state["current_topic_index"]]
+        except (KeyError, IndexError, AttributeError, TypeError):
+            return []
+        from nereus.config.settings import settings
+
+        query = state.get("session_brief") or state.get("task") or ""
+        return retriever.retrieve(
+            query=query, topic=topic, top_k=settings.retriever_top_k
+        )
+
     def _tutor_new(self, state: NereusState) -> dict:
-        return self._tutor_agent.run(state)
+        return {
+            **self._tutor_agent.run(state),
+            "retrieved_chunks": self._retrieve_chunks(state),
+        }
 
     def _tutor_retry(self, state: NereusState) -> dict:
         return {
             **self._tutor_agent.run(state),
             "retry_count": state["retry_count"] + 1,
+            "retrieved_chunks": self._retrieve_chunks(state),
         }
 
     def _tutor_advance(self, state: NereusState) -> dict:
         updates = self._advance_topic(state)
         advanced_state = {**state, **updates}
-        return {**updates, **self._tutor_agent.run(advanced_state)}
+        return {
+            **updates,
+            **self._tutor_agent.run(advanced_state),
+            "retrieved_chunks": self._retrieve_chunks(advanced_state),
+        }
 
     def _examiner(self, state: NereusState) -> dict:
         if state["retry_count"] >= state["max_retries"]:
@@ -123,33 +156,11 @@ class NereusGraph:
     def _complete(self, state: NereusState) -> dict:
         return {"status": "completed"}
 
-    def _retrieve(self, state: NereusState) -> dict:
-        """Run the RAG retriever for the current topic and store chunks.
-
-        Offline-first: if no retriever is configured (or the topic is not yet
-        known) the node emits an empty update so the rest of the graph is
-        unaffected.
-        """
-        if self._retriever is None:
-            return {}
-        try:
-            topic = state["roadmap"].topics[state["current_topic_index"]]
-        except (KeyError, IndexError, AttributeError, TypeError):
-            return {"retrieved_chunks": None}
-        from nereus.config.settings import settings
-
-        query = state.get("session_brief") or state.get("task") or ""
-        chunks = self._retriever.retrieve(
-            query=query, topic=topic, top_k=settings.retriever_top_k
-        )
-        return {"retrieved_chunks": chunks}
-
     def _build(self, checkpointer) -> StateGraph:
         builder = StateGraph(NereusState)
 
         builder.add_node("coach", self._coach_agent.run)
         builder.add_node("tutor_new", self._tutor_new)
-        builder.add_node("retrieve", self._retrieve)
         builder.add_node("tutor_retry", self._tutor_retry)
         builder.add_node("tutor_advance", self._tutor_advance)
         builder.add_node("examiner", self._examiner)
@@ -157,8 +168,7 @@ class NereusGraph:
 
         builder.set_entry_point("coach")
         builder.add_edge("coach", "tutor_new")
-        builder.add_edge("tutor_new", "retrieve")
-        builder.add_edge("retrieve", "examiner")
+        builder.add_edge("tutor_new", "examiner")
         builder.add_edge("tutor_retry", "examiner")
         builder.add_edge("tutor_advance", "examiner")
         builder.add_edge("complete", END)

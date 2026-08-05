@@ -58,7 +58,11 @@ class LLMEvaluator:
         task = context.get("task", "")
         session = context.get("session")
         messages = build_examiner_prompt(
-            topic_title=topic, task=task, submission=submission, session=session
+            topic_title=topic,
+            task=task,
+            submission=submission,
+            session=session,
+            retrieved=context.get("retrieved"),
         )
         try:
             result: AssessmentOutput = self._inference.generate(
@@ -106,6 +110,7 @@ class ExaminerAgent(BaseAgent):
             "task": state["task"],
             "topic": topic.title,
             "session": state.get("session"),
+            "retrieved": state.get("retrieved_chunks") or [],
         }
         score, feedback, weak_areas = self._evaluator(submission, context)
         verdict = Verdict.PASS if score >= 70.0 else Verdict.RETRY

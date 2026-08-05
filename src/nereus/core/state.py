@@ -52,6 +52,14 @@ class Assessment(BaseModel):
     weak_areas: list[str] = Field(default_factory=list)
 
 
+class RetrievedChunk(BaseModel):
+    """A single passage retrieved from the RAG store for the current topic."""
+
+    topic_id: str
+    content: str
+    score: float = 0.0
+
+
 class NereusState(TypedDict, total=False):
     user_profile: Optional[UserProfile]
     roadmap: Roadmap
@@ -71,5 +79,8 @@ class NereusState(TypedDict, total=False):
     # Aggregated session context (filled in by agents, see core/session.py).
     session: Optional[Any]
     session_brief: str
+
+    # RAG context (filled in by the retriever node, see core/graph.py).
+    retrieved_chunks: Optional[list[RetrievedChunk]]
 
     messages: Annotated[list, add_messages]

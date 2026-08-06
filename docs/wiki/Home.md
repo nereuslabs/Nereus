@@ -8,6 +8,7 @@
 - [Architecture](Architecture.md)
 - [Roadmap](Roadmap.md)
 - [Development](Development.md)
+- [Migration guide](MIGRATE.md) (перенести `docs/wiki/` в настоящий GitHub Wiki)
 
 ## Статус
 - ✅ **Step 1** — MVP learning automaton (LangGraph)

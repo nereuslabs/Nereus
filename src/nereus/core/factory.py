@@ -32,6 +32,7 @@ def build_nereus_graph(
     tutor=None,
     examiner=None,
     retriever: Retriever | None = None,
+    session_path: str | None = None,
 ) -> NereusGraph:
     """Centralized factory for a :class:`NereusGraph`.
 
@@ -68,14 +69,16 @@ def build_nereus_graph(
         retriever=retriever,
         checkpointer=resolved_checkpointer,
         interactive=interactive,
+        session_path=session_path,
     )
     from nereus.config.settings import settings
 
     logger.info(
-        "Nereus graph ready; retriever=%s checkpointer=%s",
+        "Nereus graph ready; retriever=%s checkpointer=%s session=%s",
         type(graph._retriever).__name__
         if getattr(graph, "_retriever", None) is not None
         else "n/a",
         settings.checkpoint_backend,
+        graph._session_path or "disabled",
     )
     return graph

@@ -2,9 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     env: str = "development"
     log_level: str = "INFO"
@@ -35,6 +33,9 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
     checkpoint_ttl_seconds: int = 0  # 0 = no TTL
+
+    # --- LearningSession dump/load (issue #22 runtime wiring) ---
+    session_path: str = ".sessions/{thread_id}.json"  # pattern, {thread_id} substituted
 
     @property
     def redis_url(self) -> str:

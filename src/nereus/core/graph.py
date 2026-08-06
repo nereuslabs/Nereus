@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Mapping
+import logging
+from pathlib import Path
+from typing import Mapping, Optional
 
 from langgraph.graph import END, StateGraph
 from langgraph.types import interrupt
@@ -10,10 +12,13 @@ from nereus.agents.coach import CoachAgent
 from nereus.agents.examiner import ExaminerAgent
 from nereus.agents.tutor import TutorAgent
 from nereus.core.router import ADVANCE_TUTOR, RETRY_TUTOR, route_after_exam
+from nereus.core.session import LearningSession
 from nereus.core.state import Assessment, NereusState, Roadmap, Verdict
 from nereus.llm.base import LLMProvider
 from nereus.llm.inference import StructuredInferenceClient
 from nereus.llm.retriever import Retriever, StubRetriever
+
+logger = logging.getLogger("nereus.graph")
 
 _DEFAULT_STATE: dict = {
     "user_profile": None,
@@ -74,19 +79,70 @@ class NereusGraph:
         retriever: Retriever | None = None,
         checkpointer=None,
         interactive: bool = False,
+        session_path: Path | str | None = None,
     ) -> None:
         inference = inference or (StructuredInferenceClient(provider) if provider else None)
         self._coach_agent = coach or CoachAgent(inference=inference, provider=provider)
         self._tutor_agent = tutor or TutorAgent(inference=inference, provider=provider)
-        self._examiner_agent = examiner or ExaminerAgent(
-            inference=inference, provider=provider
-        )
+        self._examiner_agent = examiner or ExaminerAgent(inference=inference, provider=provider)
         self._inference = inference
         self._retriever: Retriever | None = (
             retriever if retriever is not None else _default_retriever()
         )
         self._interactive = interactive
+        self._session_path = Path(session_path) if session_path else None
         self._graph = self._build(checkpointer)
+
+    # ------------------------------------------------------------------ #
+    # Session persistence (runtime wiring for #6/#22)                    #
+    def _session_for(self, config: Optional[dict]) -> LearningSession | None:
+        """Load the saved LearningSession on a new graph instance (if any).
+
+        Returns the session (or None). The caller is responsible for merging
+        key fields (profile, roadmap, index) into state before invoking.
+        """
+        if self._session_path is None or not self._session_path.exists():
+            return None
+        try:
+            return LearningSession.load(self._session_path)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("could not load session from %s: %s", self._session_path, exc)
+            return None
+
+    @staticmethod
+    def _merge_session(state: dict, session: LearningSession) -> None:
+        """Populate domain fields from a recovered session so the graph can
+        resume without re-running the coach (which requires a user_profile).
+
+        ``_DEFAULT_STATE`` seeds ``roadmap`` with an empty ``Roadmap()``; when a
+        saved session carries real topics we overwrite it so the recovered
+        state (not the empty default) drives the graph.
+        """
+        if session.user_profile is not None and state.get("user_profile") is None:
+            state["user_profile"] = session.user_profile
+        incoming_roadmap = state.get("roadmap")
+        if session.roadmap.topics and (incoming_roadmap is None or not incoming_roadmap.topics):
+            state["roadmap"] = session.roadmap
+        if state.get("current_topic_index") is None:
+            state["current_topic_index"] = session.current_topic_index
+
+    def _dump_session(self, state: Mapping[str, object]) -> None:
+        """Persist the live session after a boundary node (examiner/complete)."""
+        if self._session_path is None:
+            return
+        session = state.get("session")
+        if not isinstance(session, LearningSession):
+            return
+        try:
+            self._session_path.parent.mkdir(parents=True, exist_ok=True)
+            session.dump(self._session_path)
+            logger.debug("session dumped -> %s", self._session_path)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("could not persist session to %s: %s", self._session_path, exc)
+
+    # ------------------------------------------------------------------ #
+
+    # ------------------------------------------------------------------ #
 
     def _advance_topic(self, state: NereusState) -> dict:
         return {
@@ -110,9 +166,7 @@ class NereusGraph:
         from nereus.config.settings import settings
 
         query = state.get("session_brief") or state.get("task") or ""
-        return retriever.retrieve(
-            query=query, topic=topic, top_k=settings.retriever_top_k
-        )
+        return retriever.retrieve(query=query, topic=topic, top_k=settings.retriever_top_k)
 
     def _tutor_new(self, state: NereusState) -> dict:
         return {
@@ -196,7 +250,7 @@ class NereusGraph:
 
         Uses LLM summarisation when an inference client is wired, otherwise
         hard-truncates. Purely on the returned ``messages``; does not mutate
-        domain fields. """
+        domain fields."""
         from nereus.config.settings import settings
         from nereus.core.context import summarize_history
 
@@ -209,6 +263,11 @@ class NereusGraph:
     def invoke(self, state: object, config: dict | None = None) -> dict:
         if isinstance(state, dict):
             state = {**_DEFAULT_STATE, **state}
+            loaded = self._session_for(config)
+            if loaded is not None and state.get("session") is None:
+                state["session"] = loaded
+                self._merge_session(state, loaded)
+                logger.info("resumed session from %s", self._session_path)
         if config:
             final = self._graph.invoke(state, config=config)
         else:
@@ -216,16 +275,19 @@ class NereusGraph:
         # Bound the persisted message history (keeps checkpointer payloads sane).
         if isinstance(final, dict) and final.get("messages"):
             final.update(self.trim_context(final))
+        self._dump_session(final)
         return final
 
     async def astream(self, state: object, config: dict | None = None, stream_mode: str = "values"):
-        """Async streaming wrapper mirroring :meth:`invoke`.
-
-        Yields the merged state after each node so the UI can render coach /
-        tutor / examiner / assessment progressively and pause on ``interrupt``.
-        """
         if isinstance(state, dict):
             state = {**_DEFAULT_STATE, **state}
+            loaded = self._session_for(config)
+            if loaded is not None and state.get("session") is None:
+                state["session"] = loaded
+                self._merge_session(state, loaded)
+                logger.info("resumed session from %s", self._session_path)
         args = (state, config) if config else (state,)
         async for chunk in self._graph.astream(*args, stream_mode=stream_mode):
+            if isinstance(chunk, dict):
+                self._dump_session(chunk)
             yield chunk

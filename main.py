@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+from pathlib import Path
 
 from langgraph.types import Command
 
+from nereus.config.settings import settings
 from nereus.core.factory import build_nereus_graph
 from nereus.core.persistence import build_checkpointer
 from nereus.core.state import UserLevel, UserProfile
@@ -26,12 +28,8 @@ DEFAULT_MAX_RETRIES = 2
 def build_profile() -> UserProfile:
     print("=== Nereus Coach: let's build your learning profile ===")
     skill = input("Skill to learn [Python]: ").strip() or "Python"
-    current = input(
-        "Current level (beginner/intermediate/advanced) [beginner]: "
-    ).strip()
-    target = input(
-        "Target level (beginner/intermediate/advanced) [intermediate]: "
-    ).strip()
+    current = input("Current level (beginner/intermediate/advanced) [beginner]: ").strip()
+    target = input("Target level (beginner/intermediate/advanced) [intermediate]: ").strip()
     hours = float(input("Hours per day you can study [1]: ").strip() or "1")
     deadline = int(input("In how many days do you want to finish [30]: ").strip() or "30")
 
@@ -58,7 +56,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--checkpoint-backend",
         choices=["memory", "sqlite", "redis"],
-        help="Override CHECKPOINT_BACKEND env setting",
+        help="Override CHECKPOINTER env setting",
+    )
+    parser.add_argument(
+        "--session-path",
+        metavar="PATH",
+        help="Path for LearningSession dump/load (default: .sessions/{thread_id}.json). "
+        "Use with --resume to restore the session JSON alongside the checkpoint.",
     )
     args = parser.parse_args(argv)
 
@@ -72,7 +76,27 @@ def main(argv: list[str] | None = None) -> int:
     if args.resume:
         backend = backend  # use provided/checkpoint default
     checkpointer = build_checkpointer(backend)
-    graph = build_nereus_graph(interactive=True, checkpointer=checkpointer)
+
+    session_path = None
+    if args.resume:
+        thread_id = args.resume
+        session_path = settings.session_path.format(thread_id=thread_id)
+    elif args.session_path:
+        session_path = args.session_path
+        thread_id = "nereus-demo"
+    else:
+        thread_id = "nereus-demo"
+    Path(session_path).parent.mkdir(parents=True, exist_ok=True)
+
+    graph = build_nereus_graph(
+        interactive=True, checkpointer=checkpointer, session_path=session_path
+    )
+    logger.info(
+        "starting run | thread_id=%s session=%s backend=%s",
+        thread_id,
+        session_path,
+        backend,
+    )
 
     if args.resume:
         config = {"configurable": {"thread_id": args.resume}}
@@ -90,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
             profile.goal,
             profile.target_level,
         )
-        config = {"configurable": {"thread_id": "nereus-demo"}}
+        config = {"configurable": {"thread_id": thread_id}}
         final = graph.invoke(
             {
                 "user_profile": profile,
@@ -109,11 +133,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print("\n=== Roadmap completed! ===")
     roadmap = final.get("roadmap")
-    topics = (
-        roadmap.topics
-        if hasattr(roadmap, "topics")
-        else (roadmap or {}).get("topics", [])
-    )
+    topics = roadmap.topics if hasattr(roadmap, "topics") else (roadmap or {}).get("topics", [])
     for topic in topics:
         title = topic.title if hasattr(topic, "title") else topic.get("title", "")
         print(f"- {title}")

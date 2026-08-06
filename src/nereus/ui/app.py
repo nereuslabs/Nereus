@@ -14,8 +14,10 @@ from typing import Any, Mapping
 import chainlit as cl
 from langgraph.types import Command
 
+from nereus.config.settings import settings
 from nereus.core.factory import build_nereus_graph
 from nereus.core.graph import NereusGraph
+from nereus.core.persistence import CheckpointBackend, build_checkpointer
 from nereus.core.state import UserLevel, UserProfile
 
 logger = logging.getLogger("nereus.ui")
@@ -25,21 +27,21 @@ _INTERRUPT_KEY = "__interrupt__"
 
 
 def _attr(obj: Any, key: str, default: Any = None) -> Any:
-	"""Attribute access that also works for plain dict payloads."""
-	if isinstance(obj, dict):
-		return obj.get(key, default)
-	return getattr(obj, key, default)
+    """Attribute access that also works for plain dict payloads."""
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
 
 
 def _interrupt_value(state: Mapping[str, Any]) -> dict | None:
-	"""Extract the interrupt payload from a streamed state chunk."""
-	interrupts = state.get(_INTERRUPT_KEY) or []
-	for interrupt in interrupts:
-		try:
-			return interrupt.value  # langgraph.Interrupt
-		except AttributeError:
-			return interrupt  # already a dict
-	return None
+    """Extract the interrupt payload from a streamed state chunk."""
+    interrupts = state.get(_INTERRUPT_KEY) or []
+    for interrupt in interrupts:
+        try:
+            return interrupt.value  # langgraph.Interrupt
+        except AttributeError:
+            return interrupt  # already a dict
+    return None
 
 
 async def _ask(prompt: str, default: str = "") -> str:
@@ -86,9 +88,20 @@ class UIApp:
         self,
         graph: "NereusGraph | None" = None,
         thread_id: str | None = None,
+        checkpointer=None,
     ) -> None:
-        self.graph: NereusGraph = graph if graph is not None else build_nereus_graph(
-            interactive=True
+        if checkpointer is not None:
+            self._checkpointer = checkpointer
+        else:
+            cp_backend = settings.checkpoint_backend
+            self._checkpointer = build_checkpointer(
+                CheckpointBackend(cp_backend) if isinstance(cp_backend, str) else cp_backend
+            )
+            logger.info("UIApp checkpointer: %s", type(self._checkpointer).__name__)
+        self.graph: NereusGraph = (
+            graph
+            if graph is not None
+            else build_nereus_graph(interactive=True, checkpointer=self._checkpointer)
         )
         self.thread_id = thread_id or str(uuid.uuid4())
         self.config: dict[str, Any] = {"configurable": {"thread_id": self.thread_id}}
@@ -101,9 +114,7 @@ class UIApp:
         ``None`` if the run completed.
         """
         interrupt: dict | None = None
-        async for chunk in self.graph.astream(
-            msg, self.config, stream_mode="values"
-        ):
+        async for chunk in self.graph.astream(msg, self.config, stream_mode="values"):
             await self._render(chunk)
             value = _interrupt_value(chunk)
             if value is not None:
@@ -124,8 +135,8 @@ class UIApp:
             material = state["material"]
             if chunks:
                 refs = "\n".join(f"- {c.get('content', '')[:200]}" for c in chunks)
-                await cl.Message(content=f"📚  **Материал:**\n{material}\n\n"
-                    f"**Полезные отрывки:**\n{refs}"
+                await cl.Message(
+                    content=f"📚  **Материал:**\n{material}\n\n**Полезные отрывки:**\n{refs}"
                 ).send()
             else:
                 await cl.Message(content=f"📚  **Материал:**\n{material}").send()
@@ -133,8 +144,7 @@ class UIApp:
         interrupt = _interrupt_value(state)
         if interrupt is not None:
             task = interrupt.get("task", "")
-            await cl.Message(content=f"📝  **Экзаменатор:** {task}"
-            ).send()
+            await cl.Message(content=f"📝  **Экзаменатор:** {task}").send()
 
         assessment = state.get("assessment")
         if assessment is not None:
@@ -143,7 +153,8 @@ class UIApp:
             score = float(_attr(assessment, "score", 0.0) or 0.0)
             feedback = _attr(assessment, "feedback", "") or ""
             verdict_ru = "✅  Зачёт" if verdict == "pass" else "🔁  Нужно повторить"
-            await cl.Message(content=f"{verdict_ru}  **Оценка:** {score:.0f}/100\n{feedback or '—'}"
+            await cl.Message(
+                content=f"{verdict_ru}  **Оценка:** {score:.0f}/100\n{feedback or '—'}"
             ).send()
 
 
@@ -154,14 +165,19 @@ async def on_chat_start() -> None:
     cl.user_session.set("thread_id", thread_id)
     app = UIApp(thread_id=thread_id)
     app.profile = profile
+    cl.user_session.set("app", app)
 
-    await cl.Message(content=f"🗺️  Строю дорожную карту для «{profile.goal}» "
+    await cl.Message(
+        content=f"🗺️  Строю дорожную карту для «{profile.goal}» "
         f"(уровни: {profile.current_level.value} → {profile.target_level.value})…"
     ).send()
 
-    interrupt = await app.astream(
-        {"user_profile": profile, "max_retries": DEFAULT_MAX_RETRIES}
-    )
+    interrupt = await app.astream({"user_profile": profile, "max_retries": DEFAULT_MAX_RETRIES})
+    await _run_exam_loop(app, interrupt)
+
+
+async def _run_exam_loop(app: UIApp, interrupt: dict | None) -> None:
+    """Drive the human-in-the-loop examiner until the roadmap completes."""
     while interrupt is not None:
         task = interrupt.get("task", "")
         answer = await cl.AskUserMessage(

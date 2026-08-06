@@ -13,5 +13,7 @@ COPY src/ ./src/
 RUN pip install --no-cache-dir -e .
 
 COPY main.py ./
+COPY scripts/ ./scripts/
+COPY materials/ ./materials/
 
 CMD ["python", "main.py"]

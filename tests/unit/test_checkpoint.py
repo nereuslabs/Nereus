@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from nereus.core.persistence import (
     _ALLOWED_MSGPCK,
     CheckpointBackend,
@@ -13,31 +11,38 @@ from nereus.core.persistence import (
 )
 
 
-@pytest.fixture
-def temp_db(tmp_path: Path) -> Path:
-    return tmp_path / "nereus.sqlite3"
-
-
 def test_build_checkpointer_memory() -> None:
     cp = build_checkpointer(CheckpointBackend.MEMORY)
     assert type(cp).__name__ == "InMemorySaver"
 
 
-def test_build_checkpointer_sqlite(tmp_path: Path, monkeypatch) -> None:
+def test_build_checkpointer_sqlite(tmp_path: Path) -> None:
     db = tmp_path / "test.sqlite3"
-    monkeypatch.setenv("CHECKPOINT_DB", str(db))
+    cp = build_checkpointer(CheckpointBackend.SQLITE, db_path=str(db))
+    assert type(cp).__name__ == "SqliteSaver"
+    assert db.exists()
+
+
+def test_build_checkpointer_sqlite_uses_settings_when_no_override(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Without db_path override, falls back to settings.checkpoint_db."""
+    db = tmp_path / "from-settings.sqlite3"
+    monkeypatch.setattr("nereus.config.settings.settings.checkpoint_db", str(db))
     cp = build_checkpointer(CheckpointBackend.SQLITE)
     assert type(cp).__name__ == "SqliteSaver"
+    assert db.exists()
 
 
-def test_build_checkpointer_redis_fallback_sqlite(
-    monkeypatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("REDIS_HOST", "invalid-host")
-    monkeypatch.setenv("CHECKPOINT_DB", str(tmp_path / "fallback.sqlite3"))
-
-    cp = build_checkpointer(CheckpointBackend.REDIS)
+def test_build_checkpointer_redis_fallback_sqlite(tmp_path: Path) -> None:
+    """When Redis is unreachable, falls back to SQLite with a warning."""
+    db = tmp_path / "fallback.sqlite3"
+    # point redis at an invalid URL so RedisSaver.from_conn_string raises
+    cp = build_checkpointer(
+        CheckpointBackend.REDIS, redis_url="redis://invalid-host:6379/0", db_path=str(db)
+    )
     assert type(cp).__name__ == "SqliteSaver"
+    assert db.exists()
 
 
 def test_allowed_msgpack_models() -> None:

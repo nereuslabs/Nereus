@@ -47,4 +47,8 @@ ollama_data/
 
 # Eval harness + live-test traces
 artifacts/
+
+# Checkpoint databases (persistent checkpointer, issue #16)
 .checkpoints/
+*.sqlite3
+!tests/*

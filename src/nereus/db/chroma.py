@@ -23,7 +23,7 @@ class ChromaStore:
     ) -> None:
         self._host = host
         self._port = port
-        self._collection = collection
+        self._collection_name = collection
         self._client: Any = None
 
     @property
@@ -43,7 +43,7 @@ class ChromaStore:
         return self._client
 
     def _collection(self) -> Any:
-        return self.connect().get_or_create_collection(name=self._collection)
+        return self.connect().get_or_create_collection(name=self._collection_name)
 
     def add_documents(
         self,

@@ -121,10 +121,14 @@ NEREUS_RUN_LIVE=1 LLM_PROVIDER=ollama OLLAMA_MODEL=gemma4:31b-cloud pytest -m "n
 # Локальный запуск: CLI‑прототип (human-in-the-loop через input)
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
+
+# старт (первичный запуск — сохраняет сессию в SQLite)
 python main.py
 
+# возобновить прерванную/сохранённую сессию по thread_id
+python main.py --resume nereus-demo
+
 # Web UI на базе Chainlit (по умолчанию LLM_PROVIDER=stub — офлайн)
-pip install -e ".[dev]"
 chainlit run src/nereus/ui/app.py
 
 # Через Docker (сервис nereus-ui на http://localhost:7457)

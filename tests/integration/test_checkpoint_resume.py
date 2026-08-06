@@ -20,10 +20,9 @@ from nereus.core.persistence import CheckpointBackend, build_checkpointer
 
 
 @pytest.fixture
-def sqlite_saver(tmp_path: Path, monkeypatch) -> object:
+def sqlite_saver(tmp_path: Path) -> object:
     db = tmp_path / "resume.sqlite3"
-    monkeypatch.setenv("CHECKPOINT_DB", str(db))
-    return build_checkpointer(CheckpointBackend.SQLITE)
+    return build_checkpointer(CheckpointBackend.SQLITE, db_path=str(db))
 
 
 def test_sqlite_resume_across_instances(base_state, sqlite_saver) -> None:

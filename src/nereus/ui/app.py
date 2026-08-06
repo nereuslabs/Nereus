@@ -1,19 +1,8 @@
-"""Chainlit Web UI entrypoint for the Nereus learning automaton.
+"""Chainlit Web UI entrypoint for the Nereus learning automaton (Step 5).
 
-Replaces the previous placeholder with a working, human-in-the-loop web
-driver. The heavy lifting (roadmap → materials → examiner + RAG retrieval)
-still happens in :class:`nereus.core.graph.NereusGraph`; this module only:
-
-* collects the user profile (mirrors ``main.build_profile``);
-* runs the graph through LangGraph's async ``astream`` so each node's output
-  can be rendered incrementally (coach / tutor / examiner / assessment);
-* pauses on ``interrupt`` (the examiner's question), asks the learner for an
-  answer, then resumes with ``Command(resume=...)`` until the roadmap is
-  completed or retries are exhausted.
-
-Run locally::
-
-    chainlit run src/nereus/ui/app.py
+Runs the LangGraph pipeline in an async driver so each node's output can be
+rendered incrementally: coach → tutor (material + retrieved_chunks) →
+examiner (interrupt → cl.AskUserMessage → Command(resume=...)) → assessment.
 """
 
 from __future__ import annotations

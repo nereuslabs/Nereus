@@ -11,9 +11,13 @@ class Settings(BaseSettings):
     llm_provider: str = "stub"
 
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "gemma4:31b-cloud"
+    ollama_model: str = "gemma4:31b"
     ollama_api_key: str = ""
     ollama_timeout: float = 120.0
+
+    # Ollama Cloud for chat; local Ollama for cheap stateless embeddings.
+    # Leave empty -> falls back to ollama_base_url.
+    ollama_embed_base_url: str = ""
 
     chromadb_host: str = "localhost"
     chromadb_port: int = 8000

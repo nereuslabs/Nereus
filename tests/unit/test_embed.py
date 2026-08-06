@@ -74,3 +74,22 @@ def test_ollama_embedder_omits_auth_when_no_key(monkeypatch) -> None:
         assert "Authorization" not in headers
     finally:
         embedder.close()
+
+
+def test_ollama_embedder_uses_separate_base_url(monkeypatch) -> None:
+    """`OLLAMA_EMBED_BASE_URL` lets embeddings target a *local* Ollama while
+    the LLM chat stays on Ollama Cloud (dual-server config)."""
+    monkeypatch.setattr(settings, "ollama_embed_base_url", "http://localhost:11434")
+    monkeypatch.setattr(settings, "ollama_base_url", "https://ollama.com")
+    embedder = OllamaEmbedder()
+    assert embedder._base_url == "http://localhost:11434"
+    embedder.close()
+
+
+def test_ollama_embedder_falls_back_to_chat_base_url(monkeypatch) -> None:
+    """When OLLAMA_EMBED_BASE_URL is unset, embeddings reuse OLLAMA_BASE_URL."""
+    monkeypatch.setattr(settings, "ollama_embed_base_url", "")
+    monkeypatch.setattr(settings, "ollama_base_url", "http://127.0.0.1:11434")
+    embedder = OllamaEmbedder()
+    assert embedder._base_url == "http://127.0.0.1:11434"
+    embedder.close()

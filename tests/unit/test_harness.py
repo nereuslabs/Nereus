@@ -24,7 +24,6 @@ def _args(**kw) -> argparse.Namespace:
 
 
 def test_harness_run_stub_trace(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("LLM_PROVIDER", "stub")
     args = _args(out=str(tmp_path / "run.jsonl"), dry_run=False)
     trace = run(args)
 

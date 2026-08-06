@@ -15,11 +15,12 @@ Nereus построен как зацикленный автомат из трё
 **Стадия:** активная разработка MVP. Репо живёт в организации `nereuslabs/Nereus`.
 
 Схема шагов (см. Milestones):
-- Шаг 1 ✅ — базовый автомат‑агент (LLM runtime, реестр промптов, память сессии). Слит в `develop`.
+- Шаг 1 ✅ — базовый автомат‑агент (LangGraph, LLM runtime, реестр промптов, память сессии). Слит в `develop`.
 - Шаг 2 ✅ — абстракция LLM‑провайдера (`Ollama` + `stub`). Слит в `develop`.
-- Шаг 3 ✅ — inference‑клиент с ретраями, схемы/промпты, окно контекста, CLI‑харнес `eval_chain.py`. Слит в `develop`.
-- Шаг 4 ✅ — RAG‑конвейер: эмбеддинги (`llm/embed.py`), ChromaDB‑хранилище (`db/chroma.py`) + `llm/retriever.py`, retrieval, проинтегрированный в узлы `tutor_*` графа; персистентная сессия `LearningSession.dump/load`. Слит в `develop`.
-- Шаг 5 🚧 (отложено) — Chainlit Web‑UI как human-in-the-loop замена `CLI main.py`.
+- Шаг 3 ✅ — inference‑клиент с ретраями, схемы/промпты, окно контекста, CLI‑харнес (`scripts/eval_chain.py`). Слит в `develop`.
+- Шаг 4 ✅ — RAG‑конвейер: эмбеддинги (`llm/embed.py`), ChromaDB‑хранилище (`db/chroma.py`) + `llm/retriever.py`, retrieval, проинтегрированный в узлы `tutor_*` графа. Слит в `develop`.
+- Шаг 5 ✅ — Chainlit Web‑UI (`src/nereus/ui/app.py`) + runtime‑провязка сессии (#23). Слит в `develop`.
+- Шаг 6 ✅ — Персистентная сессия: `LearningSession.dump/load` в runtime‑цикле (`core/graph.py`) + `core/persistence.py` (sqlite/redis/memory checkpointer). #6, #16, #22.
 
 Ветвление — GitHub Flow с integration‑веткой `develop`: feature‑ветки → Pull Request (base `develop`) → merge. Текущая работа — в зависимости от задачи (см. Issues/Milestones).
 
@@ -30,13 +31,14 @@ Nereus построен как зацикленный автомат из трё
 - **сло́й промптов и схем**: реестр ролей/промптов (`llm/prompts.py`), Pydantic‑контракты ответов (`llm/schema.py`), параметры модели (`llm/params.py`), inference‑клиент с ретраями (`llm/inference.py`);
 - **RAG‑сло́й**: протоколы `Embedder` и `Retriever` (`llm/embed.py`, `llm/retriever.py`), `ChromaStore` (`db/chroma.py`), retrieval, проинтегрированный в узлы `tutor_*` (`core/graph.py`);
 - **память сессии** (`core/session.py` `LearningSession`) с агрегацией слабых мест, `session_brief`‑преамбулой, `dump`/`load`, `messages` и `trim_context`;
+- **чекпоинтер** (`core/persistence.py:build_checkpointer` — sqlite/redis/memory) для cross‑restart resume в CLI и Chainlit;
 - авто- и опциональные live‑тесты; CI (ruff + pytest); Docker + Docker Compose.
 
 ## Стек
 
 - **Python 3.11+**, **LangGraph** — оркестрация агентной цепочки
 - **Ollama** (`/api/chat`, локально / Cloud Free Tier) + **ChromaDB** — векторное хранилище и RAG (интегрировано в Шаг 4);
-- **Chainlit** — Web UI (Шаг 5, отложено);
+- **Chainlit** — Web UI (`src/nereus/ui/app.py`, Шаг 5 ✅);
 - **Docker + Docker Compose** — развёртывание
 
 ## Конфигурация LLM
@@ -69,12 +71,12 @@ CHROMADB_PORT=8000
 
 ### Параметры persistence (чекпоинтер)
 
-Граф использует LangGraph checkpointer для сохранения состояния state между
-паузами (interrupt) и перезапусками. По умолчанию — in-memory `MemorySaver`,
-чтобы CI оставалась offline.
+Граф использует LangGraph checkpointer для сохранения состояния `state` между
+паузами (`interrupt`) и перезапусками. По умолчанию — in-memory `MemorySaver`,
+чтобы CI оставалась офлайн‑детерминированной; задайте `CHECKPOINTER=sqlite`
+(или `redis`) для cross‑restart resume:
 
 ```bash
-# включить SQLite (local file) или Redis (shared)
 CHECKPOINTER=sqlite
 CHECKPOINT_DB=.checkpoints/nereus.sqlite3   # путь к файлу БД
 # или
@@ -83,11 +85,20 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 ```
 
-CLI поддерживает `--resume <thread_id>`:
+CLI поддерживает `--resume <thread_id>` для продолжения прерванной сессии
+(восстанавливает состояние из checkpointer + `LearningSession` JSON) и
+`--session-path <PATH>` для указания пути к файлу сессии (по умолчанию
+`.sessions/{thread_id}.json`):
 
 ```bash
-python main.py --resume <thread_id>
+python main.py --resume nereus-demo
+python main.py --session-path /tmp/my-session.json
 ```
+
+> Сессия и `thread_id` в Web UI сохраняются в пределах браузерной сессии
+> (Chainlit `cl.user_session`); cross‑restart resume требует persistent
+> checkpointer (`CHECKPOINTER=sqlite` по умолчанию). Полное восстановление
+> после `hard refresh` (без `thread_id`) — в беклоге (#23 follow-up).
 
 Для образования см. issue #16 (persistent checkpointer).
 

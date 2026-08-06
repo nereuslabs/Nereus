@@ -9,7 +9,7 @@ services:
       - LOG_LEVEL=INFO
       - LLM_PROVIDER=${LLM_PROVIDER:-stub}
       - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=gemma4:31b-cloud
+      - OLLAMA_MODEL=gemma4:31b
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
       - OLLAMA_TIMEOUT=120
       - CHROMADB_HOST=chromadb
@@ -35,7 +35,7 @@ services:
       - LOG_LEVEL=INFO
       - LLM_PROVIDER=${LLM_PROVIDER:-stub}
       - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=gemma4:31b-cloud
+      - OLLAMA_MODEL=gemma4:31b
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
       - CHROMADB_HOST=chromadb
       - CHROMADB_PORT=8000

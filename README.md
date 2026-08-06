@@ -48,7 +48,7 @@ Nereus построен как зацикленный автомат из трё
 ```bash
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=https://<your-ollama-host>
-OLLAMA_MODEL=gemma4:31b-cloud
+OLLAMA_MODEL=gemma4:31b
 OLLAMA_API_KEY=...
 ```
 
@@ -114,7 +114,7 @@ LLM_PROVIDER=stub python -m nereus.scripts.eval_chain --dry-run --skill "Python"
 
 # реальная модель — trace в artifacts/run.jsonl
 LLM_PROVIDER=ollama OLLAMA_BASE_URL=http://localhost:11434 \
-  OLLAMA_MODEL=gemma4:31b-cloud \
+  OLLAMA_MODEL=gemma4:31b \
   python -m nereus.scripts.eval_chain --skill "Python" --submission "this is good"
 ```
 
@@ -123,7 +123,7 @@ LLM_PROVIDER=ollama OLLAMA_BASE_URL=http://localhost:11434 \
 Тест `tests/integration/test_live_ollama.py` выполняется **только** при включённом флаге, чтобы CI оставалась офлайн‑детерминированной:
 
 ```bash
-NEREUS_RUN_LIVE=1 LLM_PROVIDER=ollama OLLAMA_MODEL=gemma4:31b-cloud pytest -m "not skip" tests/integration/test_live_ollama.py
+NEREUS_RUN_LIVE=1 LLM_PROVIDER=ollama OLLAMA_MODEL=gemma4:31b pytest -m "not skip" tests/integration/test_live_ollama.py
 ```
 
 ## Быстрый старт

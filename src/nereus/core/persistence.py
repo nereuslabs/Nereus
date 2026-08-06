@@ -42,51 +42,72 @@ def _serde() -> Any:
     return JsonPlusSerializer(allowed_msgpack_modules=_ALLOWED_MSGPCK)
 
 
-def _sqlite(serde: Any | None = None) -> Any:
-    """Build a SqliteSaver backed by ``settings.checkpoint_db``."""
+def _sqlite(
+    serde: Any | None = None, db_path: str | None = None
+) -> Any:
+    """Build a SqliteSaver backed by ``db_path`` or ``settings.checkpoint_db``."""
     from langgraph.checkpoint.sqlite import SqliteSaver
 
-    path = settings.checkpoint_db
+    path = db_path or settings.checkpoint_db
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     # LangGraph executes graph nodes in a thread pool — the connection must
-    # therefore be shareable across threads (check_same_thread=False) and the
+    # therefore be shareable across threads (check_same_thread=False); the
     # saver serializes writes internally via its own lock.
     conn = sqlite3.connect(str(path), check_same_thread=False)
     return SqliteSaver(conn, serde=serde)
 
 
-def _redis(serde: Any | None = None) -> Any:
-    """Build a RedisSaver; fall back to SQLite on connection failure."""
+def _redis(
+    *, redis_url: str | None = None, db_path: str | None = None
+) -> Any:
+    """Build a RedisSaver with the Nereus msgpack allowlist.
+
+    ``RedisSaver.from_conn_string`` is a contextmanager that closes the client
+    on exit, so we construct directly and call ``setup()`` to provision indexes.
+    If Redis is unreachable (e.g. invalid host, no server), fall back to SQLite
+    so the system remains offline-first.
+    """
     from langgraph.checkpoint.redis import RedisSaver
 
-    url = settings.redis_url
+    url = redis_url or settings.redis_url
     try:
-        return RedisSaver.from_conn_string(url, serde=serde)
+        saver = RedisSaver(redis_url=url).with_allowlist(_ALLOWED_MSGPCK)
+        saver.setup()
+        logger.info("Redis checkpointer configured at %s", url)
+        return saver
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "Redis checkpointer unavailable at %s (%s); falling back to SQLite.",
             url,
             exc,
         )
-        return _sqlite(serde)
+        return _sqlite(db_path=db_path)
 
 
 def build_checkpointer(
     backend: str | CheckpointBackend | None = None,
+    *,
+    db_path: str | None = None,
+    redis_url: str | None = None,
 ) -> Any:
     """Factory for a persistent :class:`BaseCheckpointer`.
 
     Resolution order:
     1. explicit ``backend`` argument
-    2. ``settings.checkpoint_backend`` env (``CHECKPOINTER``)
+    2. ``settings.checkpoint_backend`` (``CHECKPOINTER`` env / .env)
 
     Backends:
-    - ``memory`` (default, offline) — in-memory, per-process
-    - ``sqlite`` — local file (`.checkpoints/nereus.sqlite3` by default)
-    - ``redis`` — shared/network; auto-falls back to SQLite if unreachable
+    - ``memory`` — in-memory, per-process (default while ``CHECKPOINTER`` unset).
+    - ``sqlite`` — local file (``settings.checkpoint_db``, default
+      ``.checkpoints/nereus.sqlite3``); offline-first.
+    - ``redis`` — shared/network (``settings.redis_url``); auto-falls back to
+      SQLite if unreachable. Uses the Nereus msgpack ``allowlist`` via
+      ``RedisSaver.with_allowlist``.
 
-    The resolved saver reuses the Nereus msgpack allowlist so all pydantic
-    models in :data:`nereus.core.state` persist cleanly.
+    Args:
+        backend: optional override (useful in tests); falls back to settings.
+        db_path: override SQLite file path (defaults to ``settings.checkpoint_db``).
+        redis_url: override Redis URL (defaults to ``settings.redis_url``).
     """
     serde = _serde()
     backend = CheckpointBackend(backend or settings.checkpoint_backend)
@@ -96,7 +117,7 @@ def build_checkpointer(
 
         return MemorySaver(serde=serde)
     if backend is CheckpointBackend.SQLITE:
-        return _sqlite(serde=serde)
+        return _sqlite(serde=serde, db_path=db_path)
     if backend is CheckpointBackend.REDIS:
-        return _redis(serde=serde)
+        return _redis(redis_url=redis_url, db_path=db_path)
     raise ValueError(f"Unknown checkpoint backend: {backend!r}")

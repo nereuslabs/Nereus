@@ -20,6 +20,7 @@ from nereus.core.persistence import build_checkpointer
 from nereus.core.state import UserLevel, UserProfile
 
 INTERRUPT_KEY = "__interrupt__"
+DEFAULT_MAX_RETRIES = 2
 
 
 def build_profile() -> UserProfile:
@@ -67,11 +68,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     logger = logging.getLogger("nereus")
 
+    backend = args.checkpoint_backend or "sqlite"
+    if args.resume:
+        backend = backend  # use provided/checkpoint default
+    checkpointer = build_checkpointer(backend)
+    graph = build_nereus_graph(interactive=True, checkpointer=checkpointer)
+
     if args.resume:
         config = {"configurable": {"thread_id": args.resume}}
-        # no profile prompt; load existing state from checkpoint
-        initial_state: dict = {}
-        logger.info("resuming session | thread_id=%s", args.resume)
+        logger.info("resuming session | thread_id=%s backend=%s", args.resume, backend)
+        # Fetch the persisted state (incl. any pending interrupt) directly
+        # from the checkpointer instead of re-invoking with an empty dict
+        # (which would clobber persisted fields with _DEFAULT_STATE defaults).
+        final = graph.app.get_state(config).values or {}
+        logger.info("restored session | status=%s", final.get("status", "n/a"))
     else:
         profile = build_profile()
         logger.info(
@@ -81,15 +91,13 @@ def main(argv: list[str] | None = None) -> int:
             profile.target_level,
         )
         config = {"configurable": {"thread_id": "nereus-demo"}}
-        initial_state = {"user_profile": profile}
-
-    backend = args.checkpoint_backend
-    checkpointer = (
-        build_checkpointer(backend) if backend else build_checkpointer()
-    )
-    graph = build_nereus_graph(interactive=True, checkpointer=checkpointer)
-
-    final = graph.invoke(initial_state, config)
+        final = graph.invoke(
+            {
+                "user_profile": profile,
+                "max_retries": DEFAULT_MAX_RETRIES,
+            },
+            config,
+        )
 
     while INTERRUPT_KEY in final and final[INTERRUPT_KEY]:
         interrupt = final[INTERRUPT_KEY][0]
@@ -100,8 +108,15 @@ def main(argv: list[str] | None = None) -> int:
         final = graph.invoke(Command(resume=answer), config)
 
     print("\n=== Roadmap completed! ===")
-    for topic in final.get("roadmap", {}).get("topics", []):
-        print(f"- {topic.title}")
+    roadmap = final.get("roadmap")
+    topics = (
+        roadmap.topics
+        if hasattr(roadmap, "topics")
+        else (roadmap or {}).get("topics", [])
+    )
+    for topic in topics:
+        title = topic.title if hasattr(topic, "title") else topic.get("title", "")
+        print(f"- {title}")
 
     return 0
 

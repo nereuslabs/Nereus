@@ -119,3 +119,44 @@ def test_no_session_path_no_dump(base_state, sqlite_saver, tmp_path: Path, caplo
     sess_dir = Path(".sessions")
     # should NOT have created a session file for this thread
     assert not sess_dir.exists() or not list(sess_dir.glob("no-dump-03.json"))
+
+
+def test_uiapp_resume_across_instances(base_state, sqlite_saver, tmp_path: Path) -> None:
+    """UIApp with a shared persistent checkpointer can resume a session.
+
+    Mirrors real Chainlit behaviour: on a fresh app instance (e.g. the browser
+    tab reconnected) the same ``thread_id`` + checkpointer restores the
+    persisted state.
+    """
+    from langgraph.types import Command
+
+    from nereus.ui.app import UIApp
+
+    thread_id = "ui-thread-001"
+    config = {"configurable": {"thread_id": thread_id}}
+
+    # First app instance: drive until an interrupt is raised.
+    app_a = UIApp(checkpointer=sqlite_saver, thread_id=thread_id)
+    initial = {
+        "user_profile": base_state["user_profile"],
+        "max_retries": 2,
+    }
+    final_a = app_a.graph.invoke(initial, config)
+    assert "__interrupt__" in final_a  # paused at the examiner
+
+    # Second app instance, SAME thread_id + SAME checkpointer file.
+    app_b = UIApp(checkpointer=sqlite_saver, thread_id=thread_id)
+    restored = app_b.graph.app.get_state(config).values
+
+    # The resumed state must carry forward the progress from instance A.
+    assert restored["current_topic_index"] == final_a["current_topic_index"]
+    assert restored["status"] == final_a["status"]
+
+    # Resuming actually advances the run (completes the topic or finishes).
+    resumed = app_b.graph.invoke(Command(resume="this is good work"), config)
+    progressed = (
+        resumed["current_topic_index"] != restored["current_topic_index"]
+        or resumed.get("status") == "completed"
+        or resumed["retry_count"] > 0
+    )
+    assert progressed, "UIApp resume did not continue from the persisted checkpoint"

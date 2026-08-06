@@ -5,8 +5,9 @@ from nereus.llm.ollama import OllamaProvider
 from nereus.llm.stub import StubLLMProvider
 
 
-def test_factory_defaults_to_stub_provider(monkeypatch) -> None:
-    monkeypatch.setenv("LLM_PROVIDER", "stub")
+def test_factory_defaults_to_stub_provider() -> None:
+    # Relies on the autouse _force_stub_offline fixture in tests/conftest.py
+    # (settings.llm_provider == "stub") so this stays hermetic with a .env present.
     graph = build_nereus_graph(interactive=False)
     provider = graph._coach_agent._inference.provider
     assert isinstance(provider, StubLLMProvider)

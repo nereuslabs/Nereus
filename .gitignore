@@ -52,3 +52,6 @@ artifacts/
 .checkpoints/
 *.sqlite3
 !tests/*
+
+# LearningSession JSON dumps (runtime wiring, issue #22)
+.sessions/

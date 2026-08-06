@@ -31,9 +31,7 @@ class LearningSession(BaseModel):
     # ------------------------------------------------------------------ #
     def note_weak_areas(self, areas: list[str]) -> None:
         for area in areas:
-            self.aggregated_weak_areas[area] = (
-                self.aggregated_weak_areas.get(area, 0) + 1
-            )
+            self.aggregated_weak_areas[area] = self.aggregated_weak_areas.get(area, 0) + 1
 
     def record_assessment(self, assessment: Assessment) -> None:
         self.completed = [a for a in self.completed if a.topic_id != assessment.topic_id]
@@ -67,18 +65,14 @@ class LearningSession(BaseModel):
         idx = self.current_topic_index
         if n:
             current_line = (
-                f'Roadmap: {n} topics; current: {idx + 1}/{n} '
-                f'"{self._current_topic_title()}"'
+                f'Roadmap: {n} topics; current: {idx + 1}/{n} "{self._current_topic_title()}"'
             )
         else:
             current_line = "Roadmap: empty"
 
         if self.completed:
-            completed_line = (
-                "Completed: "
-                + ", ".join(
-                    f"{a.topic_id} {a.verdict.value} ({a.score:g})" for a in self.completed
-                )
+            completed_line = "Completed: " + ", ".join(
+                f"{a.topic_id} {a.verdict.value} ({a.score:g})" for a in self.completed
             )
         else:
             completed_line = "Completed: none"
@@ -95,16 +89,11 @@ class LearningSession(BaseModel):
 
         active_retries = {k: v for k, v in self.retry_counts.items() if v > 0}
         if active_retries:
-            retry_line = "Retries: " + ", ".join(
-                f"{t} x{n}" for t, n in active_retries.items()
-            )
+            retry_line = "Retries: " + ", ".join(f"{t} x{n}" for t, n in active_retries.items())
         else:
             retry_line = "Retries: none"
 
-        return (
-            f"{profile_line}\n{current_line}\n{completed_line}\n"
-            f"{weak_line}\n{retry_line}"
-        )
+        return f"{profile_line}\n{current_line}\n{completed_line}\n{weak_line}\n{retry_line}"
 
     # ------------------------------------------------------------------ #
     def update_from_state(
@@ -135,9 +124,7 @@ class LearningSession(BaseModel):
             completed = [a for a in completed if a.topic_id != assessment.topic_id]
             completed.append(assessment)
             if assessment.verdict.value == "retry":
-                retry_counts[assessment.topic_id] = (
-                    retry_counts.get(assessment.topic_id, 0) + 1
-                )
+                retry_counts[assessment.topic_id] = retry_counts.get(assessment.topic_id, 0) + 1
             else:
                 retry_counts[assessment.topic_id] = 0
             for w in assessment.weak_areas:

@@ -142,8 +142,13 @@ python main.py --resume nereus-demo
 # Web UI на базе Chainlit (по умолчанию LLM_PROVIDER=stub — офлайн)
 chainlit run src/nereus/ui/app.py
 
+# Локальный LLM (опционально: вытянуть локальную модель)
+ollama pull gemma4:31b
+LLM_PROVIDER=ollama python main.py
+
 # Через Docker (сервис nereus-ui на http://localhost:7457)
 docker compose up -d --build ui
+docker compose --profile ragger run --rm ingest   # загрузить материалы в ChromaDB
 ```
 
 ### Web UI (Chainlit)
@@ -195,6 +200,25 @@ docker compose up -d ui                             # Web UI на http://localho
 
 Формат файла материала: `*.md` в `--materials` (`<topic_id>.md`, где `topic_id` —
 ведущие цифры имени файла, совпадают с `RoadmapTopic.id`, напр. `1.md` → тема 1).
+
+#### Гибрид: LLM в Cloud, эмбеддинги локально
+
+Чат‑LLM может работать через Ollama Cloud (`OLLAMA_BASE_URL=https://ollama.com`),
+а векторные эмбеддинги — через локальный `ollama serve` (они легкие и не требуют
+оплаты Cloud). Достаточно задать `OLLAMA_EMBED_BASE_URL`:
+
+```bash
+# локально
+ollama serve                                   # запускает :11434
+ollama pull nomic-embed-text                    # эмбеддинг‑модель
+export LLM_PROVIDER=ollama
+export OLLAMA_BASE_URL=https://ollama.com       # чат в Cloud
+export OLLAMA_API_KEY=<your-cloud-key>
+export OLLAMA_MODEL=gemma4:31b
+export EMBEDDING_PROVIDER=ollama
+export OLLAMA_EMBED_BASE_URL=http://localhost:11434   # эмбеддинги локально
+export OLLAMA_EMBED_MODEL=nomic-embed-text
+```
 
 ## Тесты и линтер
 

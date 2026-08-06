@@ -85,7 +85,9 @@ class OllamaEmbedder:
         import httpx  # local import -> optional at runtime
 
         self._client = httpx.Client(timeout=timeout)
-        self._base_url = (base_url or settings.ollama_base_url).rstrip("/")
+        self._base_url = (
+            base_url or (settings.ollama_embed_base_url or settings.ollama_base_url)
+        ).rstrip("/")
         self.model = model or settings.ollama_embed_model
         # Bearer token required by Ollama Cloud (ollama.com). Local Ollama
         # (localhost:11434) ignores the header, so this is safe to always send.

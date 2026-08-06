@@ -24,18 +24,35 @@
 
 ## Быстрый старт
 ```bash
-python -m venv .venv && . .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-python main.py              # LLM_PROVIDER=stub → полностью офлайн
-chainlit run src/nereus/ui/app.py   # Web UI :7457
+
+# CLI (human-in-the-loop через input; офлайн по умолчанию)
+python main.py
+python main.py --resume nereus-demo          # возобновить сессию
+
+# Web UI на базе Chainlit (:7457)
+chainlit run src/nereus/ui/app.py
+
+# Через Docker (сервис nereus-ui на http://localhost:7457)
+docker compose up -d --build ui
 ```
+
+## Тесты
+```bash
+ruff check . && ruff format --check .
+pytest                                    # 99 passed, 2 skipped (live)
+NEREUS_RUN_LIVE=1 pytest                  # + Ollama/Redis/SQLite live
+```
+
+Ссылки: [Architecture](Architecture.md) | [Roadmap](Roadmap.md) | [Development](Development.md) | [Migration guide](MIGRATE.md)
 
 ### Конфиг (.env, все опциональны)
 | Параметр | Знач. по умолчанию | Описание |
 |---|---|---|
 | `LLM_PROVIDER` | `stub` | `stub \| ollama \| openai` |
 | `EMBEDDING_PROVIDER` | `stub` | `stub \| sentence_transformers \| ollama` |
-| `CHECKPOINTER` | `sqlite` | `memory \| sqlite \| redis` |
+| `CHECKPOINTER` | `memory` | `memory \| sqlite \| redis` (default `memory`, офлайн) |
 | `SESSION_PATH` | `.sessions/{thread_id}.json` | файл сессии |
 | `CHROMADB_HOST` | `localhost` | ChromaDB для RAG |
 

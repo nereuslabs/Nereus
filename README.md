@@ -156,7 +156,7 @@ material → assessment, задаёт вопросы экзаменатора и
 (требует persistent checkpointer — см. issue #16).
 
 ```bash
-# офлайн‑демо
+# офлайн‑демо (stub embeddings)
 chainlit run src/nereus/ui/app.py
 
 # с Ollama + ChromaDB
@@ -164,6 +164,37 @@ LLM_PROVIDER=ollama OLLAMA_BASE_URL=http://localhost:11434 \
   EMBEDDING_PROVIDER=sentence_transformers CHROMADB_HOST=localhost \
   chainlit run src/nereus/ui/app.py
 ```
+
+### Локальный RAG (demo)
+
+RAG‑хранилище (ChromaDB) наполняется из `materials/` скриптом
+`scripts/ingest_materials.py`. По умолчанию используются `EMBEDDING_PROVIDER=stub`
+(офлайн, fake‑векторы), но retrieval работает структурно так же, как с
+реальными эмбеддингами.
+
+```bash
+# 1. поднять ChromaDB (опционально: Ollama для LLM/embedded)
+docker compose up -d chromadb            # или ollama chromadb
+
+# 2. загрузить материалы (offline, stub)
+python scripts/ingest_materials.py --materials materials --clear
+
+# 3. (опционально) пробный прогон без записи в ChromaDB
+python scripts/ingest_materials.py --dry-run --materials materials
+
+# 4. запустить автомат (RAG‑retrieval будет подхватывать материалы)
+LLM_PROVIDER=stub python main.py
+```
+
+Через Docker (профиль `ragger`, чтобы `ingest` не стартовал в `up` по умолчанию):
+
+```bash
+docker compose --profile ragger run --rm ingest     # загрузить материалы
+docker compose up -d ui                             # Web UI на http://localhost:7457
+```
+
+Формат файла материала: `*.md` в `--materials` (`<topic_id>.md`, где `topic_id` —
+ведущие цифры имени файла, совпадают с `RoadmapTopic.id`, напр. `1.md` → тема 1).
 
 ## Тесты и линтер
 

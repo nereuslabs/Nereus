@@ -20,8 +20,8 @@ pip install -e ".[dev]"      # dev = ruff + pytest
 ```bash
 ruff check .
 ruff format --check .
-pytest                       # 95 passed, 2 skipped (live)
-NEREUS_RUN_LIVE=1 pytest     # дополнительно с Ollama/Redis, если включено
+pytest                       # 100 passed, 5 skipped (live)
+NEREUS_RUN_LIVE=1 pytest     # + Ollama/Redis/Live embed
 ```
 
 ## Хранилище

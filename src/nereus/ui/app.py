@@ -66,27 +66,100 @@ async def _ask(prompt: str, default: str = "") -> str:
     return value or default
 
 
+async def _ask_level(prompt: str, default: UserLevel) -> UserLevel:
+    """Ask for a :class:`UserLevel`, re-prompting on a typo (#55).
+
+    A single misspelled level used to raise ``ValueError`` from
+    ``UserLevel(...)`` and crash ``on_chat_start``. We now re-prompt up to 3
+    times (showing the valid values) and fall back to the default so a typo
+    never breaks the chat.
+    """
+    valid = {lvl.value: lvl for lvl in UserLevel}
+    default_value = default.value
+    for _ in range(3):
+        raw = (await _ask(prompt, default_value)).strip().lower()
+        if raw in valid:
+            return valid[raw]
+        display = raw or "(пусто)"
+        await cl.Message(
+            content=f"⚠️  Уровень «{display}» не распознан. "
+            f"Допустимые значения: {', '.join(sorted(valid))}. "
+            f"Повторите ввод (или оставьте пустым — {default_value})."
+        ).send()
+    return default
+
+
+async def _ask_float(prompt: str, default: float, minimum: float | None = None) -> float:
+    """Ask for a float, re-prompting on a non-numeric or out-of-range value."""
+    default_value = str(default)
+    for _ in range(3):
+        raw = (await _ask(prompt, default_value)).strip()
+        try:
+            value = float(raw)
+        except ValueError:
+            await cl.Message(
+                content=f"⚠️  «{raw}» — введите число, например, {default_value}."
+            ).send()
+            continue
+        if minimum is not None and value < minimum:
+            await cl.Message(
+                content=f"⚠️  Значение должно быть не меньше {minimum}."
+            ).send()
+            continue
+        return value
+    return default
+
+
+async def _ask_int(prompt: str, default: int, minimum: int | None = None) -> int:
+    """Ask for an int, re-prompting on a non-numeric or out-of-range value."""
+    default_value = str(default)
+    for _ in range(3):
+        raw = (await _ask(prompt, default_value)).strip()
+        try:
+            value = int(raw)
+        except ValueError:
+            await cl.Message(
+                content=f"⚠️  «{raw}» — введите целое число, например, {default_value}."
+            ).send()
+            continue
+        if minimum is not None and value < minimum:
+            await cl.Message(
+                content=f"⚠️  Значение должно быть не меньше {minimum}."
+            ).send()
+            continue
+        return value
+    return default
+
+
 async def collect_profile() -> UserProfile:
-    """Interactively build a :class:`UserProfile` via chat prompts."""
+    """Interactively build a :class:`UserProfile` via chat prompts.
+
+    All free-form inputs are validated and re-prompted (up to 3 attempts) so a
+    typo or a stray non-number can never crash ``on_chat_start`` (#55).
+    """
     await cl.Message(content="🤖  Я ваш персональный AI‑тютор. Давайте настроим профиль.").send()
 
     skill = await _ask("Какой навык выучить? [Python]:", "Python")
-    current = await _ask(
+    current = await _ask_level(
         "Текущий уровень (beginner/intermediate/advanced) [beginner]:",
-        "beginner",
+        UserLevel.BEGINNER,
     )
-    target = await _ask(
+    target = await _ask_level(
         "Целевой уровень (beginner/intermediate/advanced) [intermediate]:",
-        "intermediate",
+        UserLevel.INTERMEDIATE,
     )
-    hours = float(await _ask("Часов в день выделяете на обучение [1]:", "1"))
-    deadline = int(await _ask("За сколько дней хотите завершить [30]:", "30"))
+    hours = await _ask_float(
+        "Часов в день выделяете на обучение [1]:", 1.0, minimum=0.0
+    )
+    deadline = await _ask_int(
+        "За сколько дней хотите завершить [30]:", 30, minimum=1
+    )
     goal = await _ask(f"Цель обучения [{skill}]:", f"Oсвоить {skill}")
 
     return UserProfile(
         skill=skill,
-        current_level=UserLevel(current),
-        target_level=UserLevel(target),
+        current_level=current,
+        target_level=target,
         hours_per_day=hours,
         deadline_days=deadline,
         goal=goal,

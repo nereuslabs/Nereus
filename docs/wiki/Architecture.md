@@ -14,7 +14,7 @@ main.py ──► core.factory.build_nereus_graph()
                  ▼
              llm.inference  (StructuredInferenceClient, retry x2)
                  │
-        LLM_PROVIDER = stub | ollama | openai
+        LLM_PROVIDER = stub | openrouter | ollama
                  │
                  ▼
       ┌─────────────────────────────┐

@@ -12,7 +12,7 @@
 
 ## Статус
 - ✅ **Step 1** — MVP learning automaton (LangGraph)
-- ✅ **Step 2** — LLM provider abstraction + Ollama
+- ✅ **Step 2** — LLM provider abstraction + Ollama · **(Step 6)** OpenRouter integration (chat + embeddings, replaces Ollama Cloud)
 - ✅ **Step 3** — LLM runtime, prompt registry, schema validation, session memory
 - ✅ **Step 4** — ChromaDB RAG (embeddings, retriever, tutor integrate)
 - ✅ **Step 5** — Chainlit Web UI (`src/nereus/ui/app.py`)
@@ -20,7 +20,7 @@
   + persistent checkpointer (sqlite default, redis fallback)
 
 Первая полностью рабочая версия — **MVP 1.0 GA** — отслеживается в
-[MVP 1.0](https://github.com/Yan123-tech/Nereus/milestones/1).
+[MVP 1.0](https://github.com/nereuslabs/Nereus/milestones/1).
 
 ## Быстрый старт
 ```bash
@@ -42,7 +42,7 @@ docker compose up -d --build ui
 ```bash
 ruff check . && ruff format --check .
 pytest                                    # 99 passed, 2 skipped (live)
-NEREUS_RUN_LIVE=1 pytest                  # + Ollama/Redis/SQLite live
+NEREUS_RUN_LIVE=1 pytest                  # + OpenRouter/Ollama/Redis/SQLite live
 ```
 
 Ссылки: [Architecture](Architecture.md) | [Roadmap](Roadmap.md) | [Development](Development.md) | [Migration guide](MIGRATE.md)
@@ -50,8 +50,8 @@ NEREUS_RUN_LIVE=1 pytest                  # + Ollama/Redis/SQLite live
 ### Конфиг (.env, все опциональны)
 | Параметр | Знач. по умолчанию | Описание |
 |---|---|---|
-| `LLM_PROVIDER` | `stub` | `stub \| ollama \| openai` |
-| `EMBEDDING_PROVIDER` | `stub` | `stub \| sentence_transformers \| ollama` |
+| `LLM_PROVIDER` | `stub` | `stub \| openrouter \| ollama` |
+| `EMBEDDING_PROVIDER` | `stub` | `stub \| sentence_transformers \| openrouter \| ollama` |
 | `CHECKPOINTER` | `memory` | `memory \| sqlite \| redis` (default `memory`, офлайн) |
 | `SESSION_PATH` | `.sessions/{thread_id}.json` | файл сессии |
 | `CHROMADB_HOST` | `localhost` | ChromaDB для RAG |

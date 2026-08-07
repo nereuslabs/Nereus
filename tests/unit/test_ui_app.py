@@ -46,7 +46,14 @@ class Command:
 
 @pytest.fixture
 def patched_cl(monkeypatch):
-	"""Replace Chainlit primitives so renders record payloads without a session."""
+	"""Replace Chainlit primitives so renders/asks work without a live session.
+
+	Chainlit 2.x (installed in the image: 2.11.0) makes
+	``AskUserMessage.send()`` return a StepDict *dict* whose ``output`` key
+	holds the user's typed reply — not an object with ``.content``. The fixture
+	mirrors that contract so tests guard the real shape (regression for the
+	``answer.content`` AttributeError).
+	"""
 	from nereus.ui import app as appmod
 
 	class _Recorder:
@@ -56,19 +63,31 @@ def patched_cl(monkeypatch):
 		async def send(self, *a, **k):
 			return self
 
-		def __await__(self):
-			async def _self():
-				return self
-			return _self().__await__()
+	def _make_ask():
+		state = {"reply": "good"}
 
-	class _Ask(_Recorder):
-		async def send(self, *a, **k):
-			self.content = "good"
-			return self
+		def ask_user_message(**k):
+			content = k.get("content", "")
 
-	# cl.Message(...).send() already awaitable; cl.AskUserMessage uses same shape.
+			async def _send(*a, **kk):
+				return {
+					"output": state["reply"],
+					"input": content,
+					"id": "ask-1",
+					"type": "text",
+				}
+
+			rec = _Recorder(**k)
+			rec.send = _send
+			return rec
+
+		ask_user_message.state = state
+		return ask_user_message
+
+	ask = _make_ask()
 	monkeypatch.setattr(appmod.cl, "Message", lambda **k: _Recorder(**k))
-	monkeypatch.setattr(appmod.cl, "AskUserMessage", lambda **k: _Ask(**k))
+	monkeypatch.setattr(appmod.cl, "AskUserMessage", ask)
+	return ask
 
 
 async def test_astream_yields_chunks_and_returns_interrupt(patched_cl):
@@ -111,3 +130,49 @@ def test_uigraph_uses_persistent_checkpointer(tmp_path) -> None:
 	# Default (no arg) builds from settings.checkpoint_backend and is non-None.
 	app_default = UIApp(checkpointer=None)
 	assert app_default._checkpointer is not None
+
+
+async def test_ask_reads_dict_reply(patched_cl):
+	"""Regression: Chainlit 2.x AskUserMessage.send() returns a dict with
+	an 'output' key (not an object with .content); _ask must read it."""
+	from nereus.ui.app import _ask
+
+	patched_cl.state["reply"] = "мой ответ"
+	assert await _ask("Вопрос?", "fallback") == "мой ответ"
+
+
+async def test_ask_uses_default_when_reply_empty(patched_cl):
+	from nereus.ui.app import _ask
+
+	patched_cl.state["reply"] = ""
+	assert await _ask("Вопрос?", "fallback") == "fallback"
+
+
+async def test_ask_handles_none_reply(patched_cl):
+	from nereus.ui.app import _ask
+
+	patched_cl.state["reply"] = None  # simulate a no-op / timeout dict
+	assert await _ask("Вопрос?", "fallback") == "fallback"
+
+
+async def test_run_exam_loop_reads_dict_reply_and_resumes(tmp_path, patched_cl):
+	"""Regression: the examiner answer typed by the user (arrives as a dict)
+	must be resumed verbatim via Command(resume=...)."""
+	from nereus.core.persistence import CheckpointBackend, build_checkpointer
+	from nereus.ui.app import UIApp, _run_exam_loop
+
+	db = tmp_path / "ui.sqlite3"
+	app = UIApp(
+		graph=_FakeGraph(),
+		checkpointer=build_checkpointer(CheckpointBackend.SQLITE, db_path=str(db)),
+	)
+	captured: dict = {}
+
+	async def _resume_capture(cmd, config=None, stream_mode="values"):
+		captured["resume"] = getattr(cmd, "resume", None)
+		yield {"status": "completed"}
+
+	app.graph.astream = _resume_capture
+	patched_cl.state["reply"] = "решил задачу"
+	await _run_exam_loop(app, {"task": "реши задачу"})
+	assert captured["resume"] == "решил задачу"

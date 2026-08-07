@@ -38,7 +38,8 @@ def test_live_openrouter_full_pipeline() -> None:
     """
     graph = build_nereus_graph(interactive=False)
     final = graph.invoke(
-        {"user_profile": _profile(), "user_submission": "this is good, I've learned it well"}
+        {"user_profile": _profile(), "user_submission": "this is good, I've learned it well"},
+        config={"configurable": {"thread_id": "live-openrouter"}},
     )
 
     assert final["status"] == "completed"

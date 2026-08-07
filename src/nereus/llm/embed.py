@@ -193,6 +193,13 @@ def build_embedder() -> Embedder:
         logger.info("embedding provider: ollama (%s)", settings.ollama_embed_model)
         return OllamaEmbedder()
     if kind == "openrouter":
+        if not settings.openrouter_api_key:
+            logger.warning(
+                "EMBEDDING_PROVIDER=openrouter selected but OPENROUTER_API_KEY is "
+                "empty; falling back to the offline stub embedder. Set "
+                "OPENROUTER_API_KEY to use OpenRouter embeddings."
+            )
+            return StubEmbedder()
         logger.info("embedding provider: openrouter (%s)", settings.openrouter_embed_model)
         return OpenRouterEmbedder(api_key=settings.openrouter_api_key)
     logger.info("embedding provider: stub (offline)")

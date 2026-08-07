@@ -60,6 +60,11 @@ OPENROUTER_MODEL=openrouter/free   # или конкретная платная 
 > (или ~1000 RPD при наличии кредитов). При 401/402/403 API‑сообщает об ошибке, и
 > агенты переходят на детерминированный `stub`‑fallback (без сети).
 
+> **Без ключа?** Если `LLM_PROVIDER=openrouter`, но `OPENROUTER_API_KEY` пустой
+> (например, в Docker без env‑переменной), сервис стартует в офлайн‑режиме `stub`
+> с предупреждением в логах — UI и CLI не падают. Чтобы включить OpenRouter, задайте
+> ключ: `OPENROUTER_API_KEY=<key> docker compose up -d --build ui`.
+
 Для локального/Cloud Ollama (наследие, deprecated):
 ```bash
 LLM_PROVIDER=ollama

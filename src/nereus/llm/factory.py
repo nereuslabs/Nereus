@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
+
 from nereus.config.settings import settings
 from nereus.llm.base import LLMProvider
 from nereus.llm.ollama import OllamaProvider
 from nereus.llm.openrouter import OpenRouterProvider
 from nereus.llm.stub import StubLLMProvider
+
+logger = logging.getLogger("nereus")
 
 
 def build_llm_provider() -> LLMProvider:
@@ -13,8 +17,20 @@ def build_llm_provider() -> LLMProvider:
     * ``llm_provider=openrouter`` -> OpenRouter unified API (cloud)
     * ``llm_provider=ollama``     -> real native Ollama HTTP client (legacy)
     * otherwise                   -> in-memory stub (no network)
+
+    Selecting ``openrouter`` without an ``OPENROUTER_API_KEY`` falls back to the
+    offline stub (with a logged warning) so the UI/CLI still boot — matching the
+    project's "stub is the safe default" contract — instead of crashing at
+    graph-construction time.
     """
     if settings.llm_provider == "openrouter":
+        if not settings.openrouter_api_key:
+            logger.warning(
+                "LLM_PROVIDER=openrouter selected but OPENROUTER_API_KEY is empty; "
+                "falling back to the offline stub provider. Set OPENROUTER_API_KEY "
+                "(see .env.example) to call OpenRouter."
+            )
+            return StubLLMProvider()
         return OpenRouterProvider(
             api_key=settings.openrouter_api_key,
             base_url=settings.openrouter_base_url,

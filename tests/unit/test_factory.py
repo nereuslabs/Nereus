@@ -54,3 +54,19 @@ def test_factory_resolves_openrouter_provider(monkeypatch) -> None:
     assert provider.model == "openrouter/free"
     assert provider.base_url == "https://openrouter.ai/api/v1"
     assert provider.timeout == 60
+
+
+def test_factory_openrouter_without_key_falls_back_to_stub(monkeypatch) -> None:
+    """Selecting openrouter with an empty key must not crash boot.
+
+    Mirrors the docker-compose default (LLM_PROVIDER=openrouter) on a device
+    without OPENROUTER_API_KEY: the UI/CLI should still start offline via stub.
+    """
+    from nereus.config import settings as settings_module
+    from nereus.llm.stub import StubLLMProvider
+
+    monkeypatch.setattr(settings_module.settings, "llm_provider", "openrouter")
+    monkeypatch.setattr(settings_module.settings, "openrouter_api_key", "")
+    graph = build_nereus_graph(interactive=False)
+    provider = graph._coach_agent._inference.provider
+    assert isinstance(provider, StubLLMProvider)

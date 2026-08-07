@@ -13,15 +13,18 @@ pip install -e ".[dev]"      # dev = ruff + pytest
 | Провайдер | Переменные | Требования |
 |-----------|-----------|------------|
 | `stub`    | `LLM_PROVIDER=stub` | выбран по умолчанию, ничего не нужно |
+| `openrouter` | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL=openrouter/free` | ключ с openrouter.ai |
 | `ollama`  | `OLLAMA_BASE_URL=http://localhost:11434`, `OLLAMA_MODEL=qwen3:1.7b` | `ollama serve` |
-| `openai`  | `OPENAI_API_KEY`, `OPENAI_MODEL=gpt-4o-mini` | ключ OpenAI |
+
+`openrouter` также служит провайдером эмбеддингов (`EMBEDDING_PROVIDER=openrouter`),
+заменяя тяжёлый локальный Ollama‑embed (~8 ГБ RAM).
 
 ## Проверка
 ```bash
 ruff check .
 ruff format --check .
-pytest                       # 100 passed, 5 skipped (live)
-NEREUS_RUN_LIVE=1 pytest     # + Ollama/Redis/Live embed
+pytest                       # 80 passed, 6 skipped (live)
+NEREUS_RUN_LIVE=1 pytest     # + OpenRouter/Ollama/Redis/Live embed
 ```
 
 ## Хранилище

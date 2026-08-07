@@ -12,8 +12,8 @@
    ```
 2. Клонируйте wiki‑репо и запушьте страницы:
    ```bash
-   git clone https://github.com/Yan123-tech/Nereus.wiki.git /tmp/Nereus.wiki
+   git clone https://github.com/nereuslabs/Nereus.wiki.git /tmp/Nereus.wiki
    cp docs/wiki/*.md /tmp/Nereus.wiki/
    cd /tmp/Nereus.wiki && git add . && git commit -m "docs: import wiki pages" && git push
    ```
-3. Готово — страницы доступны на `github.com/Yan123-tech/Nereus/wiki`.
+3. Готово — страницы доступны на `github.com/nereuslabs/Nereus/wiki`.

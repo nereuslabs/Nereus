@@ -22,4 +22,4 @@
 
 ## Мильстоуны
 - **MVP 1.0** — Steps 1–3 + RAG (#4) + UI (#5) + persistent session (#6):
-  https://github.com/Yan123-tech/Nereus/milestones/1
+  https://github.com/nereuslabs/Nereus/milestones/1

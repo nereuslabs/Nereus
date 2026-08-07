@@ -33,6 +33,18 @@ def _attr(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
+def _answer_text(answer: Any) -> str:
+    """Extract the typed reply from a Chainlit ``AskUserMessage`` response.
+
+    Chainlit 2.x returns a ``StepDict`` (plain dict) holding the reply in the
+    ``output`` key, while older runtimes returned an object exposing ``.content``.
+    Both shapes are handled so the UI keeps working across versions.
+    """
+    if answer is None:
+        return ""
+    return str(_attr(answer, "output") or _attr(answer, "content", "") or "")
+
+
 def _interrupt_value(state: Mapping[str, Any]) -> dict | None:
     """Extract the interrupt payload from a streamed state chunk."""
     interrupts = state.get(_INTERRUPT_KEY) or []
@@ -50,7 +62,7 @@ async def _ask(prompt: str, default: str = "") -> str:
         content=prompt,
         timeout=600,
     ).send()
-    value = (answer.content or "").strip()
+    value = _answer_text(answer).strip()
     return value or default
 
 
@@ -184,7 +196,7 @@ async def _run_exam_loop(app: UIApp, interrupt: dict | None) -> None:
             content=f"[Экзаменатор] {task}\nВаш ответ (или 'good', чтобы сдать):",
             timeout=900,
         ).send()
-        submission = (answer.content or "").strip()
+        submission = _answer_text(answer).strip()
         interrupt = await app.astream(Command(resume=submission))
 
     await cl.Message(content="✅  Готово! Начните новый чат, чтобы пройти курс ещё раз.").send()

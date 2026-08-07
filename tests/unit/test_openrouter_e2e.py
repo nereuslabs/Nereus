@@ -5,6 +5,7 @@ import json
 import httpx
 
 from nereus.core.factory import build_nereus_graph
+from nereus.core.persistence import CheckpointBackend, build_checkpointer
 from nereus.core.state import Verdict
 from nereus.llm.openrouter import OpenRouterProvider
 
@@ -60,7 +61,15 @@ def test_openrouter_provider_drives_full_pipeline(base_state) -> None:
         api_key="test-key",
         client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
-    graph = build_nereus_graph(interactive=False, provider=provider)
+    # Hermetic in-process checkpointer (with the Nereus msgpack allowlist) so the
+    # test never touches the shared .checkpoints/nereus.sqlite3: a stale completed
+    # checkpoint for this thread_id would otherwise resume the run and duplicate the
+    # coach->tutor->examiner cycle (6 calls instead of 3).
+    graph = build_nereus_graph(
+        interactive=False,
+        provider=provider,
+        checkpointer=build_checkpointer(CheckpointBackend.MEMORY),
+    )
 
     final = graph.invoke(
         {**base_state, "user_submission": "this is good, I've learned it well"},

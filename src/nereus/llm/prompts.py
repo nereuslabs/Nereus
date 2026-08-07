@@ -7,35 +7,48 @@ from nereus.llm.params import AgentRole
 
 SESSION_PREAMBLE = "SESSION CONTEXT — use this to keep every answer grounded:"
 
+# Mandates Russian *content* output while keeping JSON keys (material, task,
+# score, ...) intact — those are structure, not speech (#52). The OpenRouter
+# chat model otherwise defaults to English once the system prompt is English.
+LANGUAGE_INSTRUCTION = (
+    " Отвечайте строго на русском языке. Все текстовые поля выходных данных "
+    "(material, task, feedback, weak_areas, а также title и description тем) "
+    "должны быть на русском языке. JSON-ключи (material, task, score и т.п.) "
+    "остаются английскими — это структура, а не контент. Не используйте "
+    "английский в текстовых значениях."
+)
+
 
 def _system(role: AgentRole) -> str:
     if role == AgentRole.COACH:
-        return (
+        base = (
             "You are an expert learning coach. Build a personalized, ordered "
             "learning roadmap (fundamentals -> advanced). Return ONLY valid JSON "
             'with key "topics": [{"id": "<1-based str>", "title": "<str>", '
             '"description": "<str>"}], 3 to 8 topics. Never invent skills '
             "beyond the user's goal. If unsure, ask."
         )
-    if role == AgentRole.TUTOR:
-        return (
+    elif role == AgentRole.TUTOR:
+        base = (
             "You are a patient tutor. Generate concise learning material plus a "
             "single practical task for the given topic. Return ONLY valid JSON "
             "with keys: material (<str>), task (<str>)."
         )
-    if role == AgentRole.EXAMINER:
-        return (
+    elif role == AgentRole.EXAMINER:
+        base = (
             "You are a strict examiner for an AI tutor. Grade the student's "
             "answer to the given task. Return ONLY valid JSON with keys: "
             "score (<int 0-100>), feedback (<str>), weak_areas (list of str). "
             "Passing score is >= 70. Be honest: if the answer is shallow or "
             "wrong, score < 70 and name the weak areas."
         )
-    return (  # SUMMARIZER
-        "You are a concise summarizer. Condense the conversation so far into "
-        "a single short paragraph that preserves the learner's current topic, "
-        "recent progress and open weak areas. Do NOT output JSON."
-    )
+    else:  # SUMMARIZER
+        base = (
+            "You are a concise summarizer. Condense the conversation so far into "
+            "a single short paragraph that preserves the learner's current topic, "
+            "recent progress and open weak areas. Do NOT output JSON."
+        )
+    return base + LANGUAGE_INSTRUCTION
 
 
 def _brief(session: Any | None) -> str:

@@ -50,15 +50,15 @@ class TutorAgent(BaseAgent):
     # Deterministic fallback
     # ------------------------------------------------------------------ #
     def _topic_material(self, topic: RoadmapTopic) -> str:
-        return f"Material for '{topic.title}': {topic.description}"
+        return f"Материал по теме «{topic.title}»: {topic.description}"
 
     def _task_for(self, topic: RoadmapTopic) -> str:
-        return f"Practical task: demonstrate mastery of '{topic.title}'."
+        return f"Практическое задание: продемонстрируйте умение темы «{topic.title}»."
 
     def _revision_material(self, state: NereusState) -> str:
         assessment = state.get("assessment")
-        weak = ", ".join(assessment.weak_areas) if assessment else "the topic"
-        return f"Revision material deepening {weak}."
+        weak = ", ".join(assessment.weak_areas) if assessment else "тема"
+        return f"Материал для повторения, углубляющий {weak}."
 
     # ------------------------------------------------------------------ #
     # LLM-backed generation

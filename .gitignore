@@ -40,6 +40,9 @@ htmlcov/
 # Chainlit
 .chainlit/
 
+# Poolside harness (local; not part of the Nereus repository)
+.poolside/
+
 # Docker / ChromaDB data
 .chroma/
 chroma_db/

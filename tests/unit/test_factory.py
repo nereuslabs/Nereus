@@ -35,3 +35,22 @@ def test_factory_resolves_ollama_provider(monkeypatch) -> None:
     assert provider.model == "gemma-test"
     assert provider.base_url == "http://localhost:11434"
     assert provider.timeout == 42
+
+
+def test_factory_resolves_openrouter_provider(monkeypatch) -> None:
+    from nereus.config import settings as settings_module
+    from nereus.llm.openrouter import OpenRouterProvider
+
+    monkeypatch.setattr(settings_module.settings, "llm_provider", "openrouter")
+    monkeypatch.setattr(settings_module.settings, "openrouter_api_key", "test-key")
+    monkeypatch.setattr(settings_module.settings, "openrouter_model", "openrouter/free")
+    monkeypatch.setattr(
+        settings_module.settings, "openrouter_base_url", "https://openrouter.ai/api/v1"
+    )
+    monkeypatch.setattr(settings_module.settings, "openrouter_timeout", 60.0)
+    graph = build_nereus_graph(interactive=False)
+    provider = graph._coach_agent._inference.provider
+    assert isinstance(provider, OpenRouterProvider)
+    assert provider.model == "openrouter/free"
+    assert provider.base_url == "https://openrouter.ai/api/v1"
+    assert provider.timeout == 60

@@ -211,7 +211,7 @@ class NereusGraph:
                 topic_id=state["roadmap"].topics[state["current_topic_index"]].id,
                 score=70.0,
                 verdict=Verdict.PASS,
-                feedback="Maximum retries reached; advancing automatically.",
+                feedback="Достигнуто максимальное число попыток; продвигаемся дальше.",
                 weak_areas=[],
             )
             return {"assessment": forced}

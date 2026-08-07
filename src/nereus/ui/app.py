@@ -118,6 +118,11 @@ class UIApp:
         self.thread_id = thread_id or str(uuid.uuid4())
         self.config: dict[str, Any] = {"configurable": {"thread_id": self.thread_id}}
         self.profile: UserProfile | None = None
+        # Last rendered value per logical field; used to deduplicate chat
+        # messages under stream_mode="values" (LangGraph re-emits the whole
+        # accumulated state after every node, which would otherwise re-send
+        # material / assessment / exam task on each chunk — #51).
+        self._last: dict[str, Any] = {}
 
     async def astream(self, msg: Mapping[str, Any] | Command) -> dict | None:
         """Stream the graph forward (or resume) and render each chunk.
@@ -136,15 +141,22 @@ class UIApp:
         if completed:
             await cl.Message(
                 content="🎓  Дорогой ученик! Вы прошли всю дорожную карту. "
-                "Поздравляем! Продолжайте в том же духе."
+                "👏 Поздравляем! Чтобы пройти курс ещё раз — начните новый чат."
             ).send()
         return interrupt
 
     async def _render(self, state: Mapping[str, Any]) -> None:
-        """Render a single state chunk as appropriate chat messages."""
-        if state.get("material"):
+        """Render a single state chunk, sending only fields that changed.
+
+        LangGraph ``stream_mode="values"`` re-emits the *whole* accumulated
+        state after each node, so ``material``/``assessment``/``task`` would
+        otherwise be re-sent on every chunk (#51). Each field is rendered only
+        when its value differs from the last rendered value for this session.
+        """
+        material = state.get("material")
+        if material and material != self._last.get("material"):
+            self._last["material"] = material
             chunks = state.get("retrieved_chunks") or []
-            material = state["material"]
             if chunks:
                 refs = "\n".join(f"- {c.get('content', '')[:200]}" for c in chunks)
                 await cl.Message(
@@ -153,21 +165,30 @@ class UIApp:
             else:
                 await cl.Message(content=f"📚  **Материал:**\n{material}").send()
 
+        assessment = state.get("assessment")
+        if assessment is not None:
+            akey = (
+                str(_attr(assessment, "verdict", "")),
+                float(_attr(assessment, "score", 0.0) or 0.0),
+                str(_attr(assessment, "feedback", "") or ""),
+            )
+            if akey != self._last.get("assessment"):
+                self._last["assessment"] = akey
+                verdict = _attr(assessment, "verdict")
+                verdict = verdict.value if hasattr(verdict, "value") else str(verdict)
+                score = float(_attr(assessment, "score", 0.0) or 0.0)
+                feedback = _attr(assessment, "feedback", "") or ""
+                verdict_ru = "✅  Зачёт" if verdict == "pass" else "🔁  Нужно повторить"
+                await cl.Message(
+                    content=f"{verdict_ru}  **Оценка:** {score:.0f}/100\n{feedback or '—'}"
+                ).send()
+
         interrupt = _interrupt_value(state)
         if interrupt is not None:
             task = interrupt.get("task", "")
-            await cl.Message(content=f"📝  **Экзаменатор:** {task}").send()
-
-        assessment = state.get("assessment")
-        if assessment is not None:
-            verdict = _attr(assessment, "verdict")
-            verdict = verdict.value if hasattr(verdict, "value") else str(verdict)
-            score = float(_attr(assessment, "score", 0.0) or 0.0)
-            feedback = _attr(assessment, "feedback", "") or ""
-            verdict_ru = "✅  Зачёт" if verdict == "pass" else "🔁  Нужно повторить"
-            await cl.Message(
-                content=f"{verdict_ru}  **Оценка:** {score:.0f}/100\n{feedback or '—'}"
-            ).send()
+            if task != self._last.get("interrupt_task"):
+                self._last["interrupt_task"] = task
+                await cl.Message(content=f"📝  **Экзаменатор:** {task}").send()
 
 
 @cl.on_chat_start
@@ -199,4 +220,6 @@ async def _run_exam_loop(app: UIApp, interrupt: dict | None) -> None:
         submission = _answer_text(answer).strip()
         interrupt = await app.astream(Command(resume=submission))
 
-    await cl.Message(content="✅  Готово! Начните новый чат, чтобы пройти курс ещё раз.").send()
+    # Completion is announced once by UIApp.astream (on the final completed
+    # chunk); nothing to say here — avoids the duplicate "you passed / start a
+    # new chat" pair that previously appeared twice (#51).

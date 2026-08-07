@@ -216,3 +216,50 @@ async def test_run_exam_loop_reads_dict_reply_and_resumes(tmp_path, patched_cl):
 		if m and ("Дорогой ученик" in m or "Готово" in m)
 	)
 	assert completions == 1, patched_cl.messages
+
+
+async def test_collect_profile_recovers_from_level_typo(patched_cl, monkeypatch):
+	"""#55 regression: a misspelled learning level must not crash
+	collect_profile; it re-prompts and accepts a corrected value instead of
+	raising ValueError from UserLevel(...) inside on_chat_start."""
+	from nereus.core.state import UserLevel
+	from nereus.ui import app as appmod
+
+	replies = [
+		"Python",  # skill
+		"intemediate",  # current level typo -> re-prompt
+		"intermediate",  # current level corrected -> accepted
+		"intermediate",  # target level
+		"1.5",  # hours
+		"30",  # deadline
+		"Стать Python-разработчиком",  # goal
+	]
+	it = iter(replies)
+
+	async def fake_ask(prompt, default=""):
+		return next(it)
+
+	monkeypatch.setattr(appmod, "_ask", fake_ask)
+	profile = await appmod.collect_profile()
+	assert profile.skill == "Python"
+	assert profile.current_level == UserLevel.INTERMEDIATE
+	assert profile.target_level == UserLevel.INTERMEDIATE
+	assert profile.hours_per_day == 1.5
+	assert profile.deadline_days == 30
+	assert profile.goal == "Стать Python-разработчиком"
+
+
+async def test_ask_float_recovers_from_nonnumeric(patched_cl, monkeypatch):
+	"""#55 regression: a non-numeric hour entry re-prompts instead of
+	crashing on_chat_start with ValueError."""
+	from nereus.ui import app as appmod
+
+	replies = ["не число", "2.5"]
+	it = iter(replies)
+
+	async def fake_ask(prompt, default=""):
+		return next(it)
+
+	monkeypatch.setattr(appmod, "_ask", fake_ask)
+	val = await appmod._ask_float("Часов в день [1]:", 1.0, minimum=0.0)
+	assert val == 2.5

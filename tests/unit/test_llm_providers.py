@@ -74,3 +74,16 @@ def test_ollama_provider_posts_native_chat() -> None:
     assert captured["body"]["format"] == "json"
     assert captured["body"]["stream"] is False
     assert captured["auth"] == "Bearer secret"
+
+
+def test_system_prompts_mandate_russian_output() -> None:
+    """#52 regression: every agent system prompt must carry the Russian language
+    directive so the OpenRouter model stops switching to English."""
+    from nereus.llm.params import AgentRole
+    from nereus.llm.prompts import LANGUAGE_INSTRUCTION, _system
+
+    assert "русск" in LANGUAGE_INSTRUCTION.lower()
+    for role in AgentRole:
+        sys_prompt = _system(role)
+        assert LANGUAGE_INSTRUCTION in sys_prompt, role
+        assert "на русском" in sys_prompt.lower(), role

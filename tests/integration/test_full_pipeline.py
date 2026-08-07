@@ -33,7 +33,7 @@ def test_failing_submission_terminates_via_max_retries(base_state) -> None:
     assert final["current_topic_index"] == 2
     assert final["status"] == "completed"
     assert final["assessment"].verdict == Verdict.PASS
-    assert "retries" in final["assessment"].feedback.lower()
+    assert "попыток" in final["assessment"].feedback.lower()
 
 
 def test_retry_loop_reinvokes_examiner(base_state) -> None:

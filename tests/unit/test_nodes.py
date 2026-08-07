@@ -40,7 +40,7 @@ def test_tutor_retry_produces_revision_material(base_state, roadmap) -> None:
         weak_areas=["syntax"],
     )
     result = TutorAgent().run(base_state)
-    assert "Revision" in result["material"]
+    assert "повтор" in result["material"].lower()
     assert "syntax" in result["material"]
 
 

@@ -27,6 +27,9 @@ class _FakeGraph:
 		if isinstance(state, Command):
 			yield {"status": "completed"}
 		else:
+			# Simulate stream_mode="values": LangGraph re-emits the *whole*
+			# accumulated state on every chunk, so fields set by earlier nodes
+			# (material, assessment) are still present on later chunks (#51).
 			yield {
 				"material": "Раздел 1",
 				"retrieved_chunks": [{"content": "отрывок 1", "score": 0.9}],
@@ -36,7 +39,13 @@ class _FakeGraph:
 					topic_id="t1", score=90.0, verdict=Verdict.PASS, feedback="ok"
 				)
 			}
-			yield {"__interrupt__": [_Interrupt({"task": "реши задачу"})]}
+			yield {
+				"material": "Раздел 1",
+				"assessment": Assessment(
+					topic_id="t1", score=90.0, verdict=Verdict.PASS, feedback="ok"
+				),
+				"__interrupt__": [_Interrupt({"task": "реши задачу"})],
+			}
 
 
 class Command:
@@ -52,15 +61,19 @@ def patched_cl(monkeypatch):
 	``AskUserMessage.send()`` return a StepDict *dict* whose ``output`` key
 	holds the user's typed reply — not an object with ``.content``. The fixture
 	mirrors that contract so tests guard the real shape (regression for the
-	``answer.content`` AttributeError).
+	``answer.content`` AttributeError). It also records every ``cl.Message``
+	actually rendered so duplication regressions (#51) can be asserted against.
 	"""
 	from nereus.ui import app as appmod
+
+	messages: list[str] = []
 
 	class _Recorder:
 		def __init__(self, *a, **k):
 			self.content = k.get("content")
 
 		async def send(self, *a, **k):
+			messages.append(self.content)
 			return self
 
 	def _make_ask():
@@ -85,6 +98,7 @@ def patched_cl(monkeypatch):
 		return ask_user_message
 
 	ask = _make_ask()
+	ask.messages = messages
 	monkeypatch.setattr(appmod.cl, "Message", lambda **k: _Recorder(**k))
 	monkeypatch.setattr(appmod.cl, "AskUserMessage", ask)
 	return ask
@@ -104,6 +118,24 @@ async def test_astream_yields_chunks_and_returns_interrupt(patched_cl):
 	interrupt2 = await app.astream(Command(resume="good"))
 	assert interrupt2 is None  # run completed
 	assert graph.calls[-1] is not None and graph.calls[-1].resume == "good"
+
+
+async def test_render_deduplicates_material_and_assessment(patched_cl):
+	"""#51 regression: LangGraph re-emits persisted state on every chunk, so
+	material / assessment / exam task must each render exactly once and the
+	run must end with a single completion message."""
+	graph = _FakeGraph()
+	app = UIApp(graph=graph)
+	await app.astream({"user_profile": object(), "max_retries": 2})
+	await app.astream(Command(resume="good"))
+
+	def _count(sub: str) -> int:
+		return sum(1 for m in patched_cl.messages if m and sub in m)
+
+	assert _count("Материал") == 1, patched_cl.messages
+	assert _count("Оценка") == 1, patched_cl.messages
+	assert _count("Экзаменатор") == 1, patched_cl.messages
+	assert _count("Дорогой ученик") == 1, patched_cl.messages
 
 
 def test_interrupt_value_parses_object():
@@ -157,7 +189,8 @@ async def test_ask_handles_none_reply(patched_cl):
 
 async def test_run_exam_loop_reads_dict_reply_and_resumes(tmp_path, patched_cl):
 	"""Regression: the examiner answer typed by the user (arrives as a dict)
-	must be resumed verbatim via Command(resume=...)."""
+	must be resumed verbatim via Command(resume=...); and the run must end
+	with a single completion message (no duplicate #51)."""
 	from nereus.core.persistence import CheckpointBackend, build_checkpointer
 	from nereus.ui.app import UIApp, _run_exam_loop
 
@@ -176,3 +209,10 @@ async def test_run_exam_loop_reads_dict_reply_and_resumes(tmp_path, patched_cl):
 	patched_cl.state["reply"] = "решил задачу"
 	await _run_exam_loop(app, {"task": "реши задачу"})
 	assert captured["resume"] == "решил задачу"
+	# Exactly one completion message: the one from UIApp.astream. There must
+	# be NO second one from _run_exam_loop (#51 duplicate-completion guard).
+	completions = sum(
+		1 for m in patched_cl.messages
+		if m and ("Дорогой ученик" in m or "Готово" in m)
+	)
+	assert completions == 1, patched_cl.messages

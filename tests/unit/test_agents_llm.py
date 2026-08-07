@@ -50,8 +50,8 @@ def test_tutor_falls_back_when_llm_returns_bad_json(roadmap, base_state) -> None
     base_state["roadmap"] = roadmap
     result = tutor.run(base_state)
     topic = roadmap.topics[base_state["current_topic_index"]]
-    assert result["material"] == f"Material for '{topic.title}': {topic.description}"
-    assert result["task"] == f"Practical task: demonstrate mastery of '{topic.title}'."
+    assert result["material"] == f"Материал по теме «{topic.title}»: {topic.description}"
+    assert result["task"] == f"Практическое задание: продемонстрируйте умение темы «{topic.title}»."
 
 
 def test_tutor_does_not_swallow_provider_errors(roadmap, base_state) -> None:

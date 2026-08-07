@@ -49,6 +49,11 @@ def _default_retriever() -> Retriever:
     from nereus.llm.retriever import ChromaRetriever
 
     store = ChromaStore(host=settings.chromadb_host, port=settings.chromadb_port)
+    # Eagerly cache the lazy chromadb HTTP client so retrieval can use it; the
+    # call is lazy (no network at construction). If the server is unreachable,
+    # ``_retrieve_chunks`` degrades to no-RAG instead of starting the run without
+    # a connected store.
+    store.connect()
     return ChromaRetriever(store=store, embedder=build_embedder())
 
 
@@ -166,7 +171,17 @@ class NereusGraph:
         from nereus.config.settings import settings
 
         query = state.get("session_brief") or state.get("task") or ""
-        return retriever.retrieve(query=query, topic=topic, top_k=settings.retriever_top_k)
+        try:
+            return retriever.retrieve(
+                query=query, topic=topic, top_k=settings.retriever_top_k
+            )
+        except Exception as exc:  # noqa: BLE001  retrieval must never sink a run
+            logger.warning(
+                "RAG retrieval failed for topic %s; continuing without context: %s",
+                getattr(topic, "id", None),
+                exc,
+            )
+            return []
 
     def _tutor_new(self, state: NereusState) -> dict:
         return {

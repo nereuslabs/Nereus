@@ -52,7 +52,7 @@ def _force_stub_offline(monkeypatch, request) -> None:
     ineffective once ``Settings()`` is built. This autouse fixture pins the
     LLM/embedding/checkpointer backends to stub/sqlite for every *non-live* test
     so the 90+ offline tests stay deterministic even when a developer's ``.env``
-    (e.g. ``LLM_PROVIDER=ollama``, ``NEREUS_RUN_LIVE=1``) is present.
+    (e.g. ``NEREUS_RUN_LIVE=1``) is present.
 
     Live tests under ``tests/integration/test_live_*.py`` are exempt — they
     gate themselves via ``pytest.mark.skipif`` on ``NEREUS_RUN_LIVE`` and manage

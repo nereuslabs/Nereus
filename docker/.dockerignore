@@ -16,4 +16,3 @@ build
 *.egg-info
 .chroma
 chroma_db
-ollama_data

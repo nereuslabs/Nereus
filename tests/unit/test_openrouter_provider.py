@@ -62,7 +62,7 @@ def test_openrouter_provider_posts_native_completions() -> None:
     assert captured["url"].endswith("/api/v1/chat/completions")
     assert captured["auth"] == "Bearer secret"
     assert captured["referer"] == "https://example.com"
-    # OpenAI-compatible body shape (NOT Ollama's /api/chat + options.format)
+    # OpenAI-compatible body shape (not the legacy /api/chat + options.format)
     assert captured["body"]["model"] == "openrouter/free"
     assert captured["body"]["max_tokens"] == 4096
     assert captured["body"]["stream"] is False

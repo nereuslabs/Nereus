@@ -3,7 +3,7 @@
 
 Walks ``--materials`` dir, chunks each file, embeds the chunks via the
 configured ``Embedder`` (``EMBEDDING_PROVIDER``: stub/sentence_transformers/
-ollama), and upserts them into ChromaDB (``ChromaStore``) tagged with the
+openrouter), and upserts them into ChromaDB (``ChromaStore``) tagged with the
 topic_id derived from the filename stem (e.g. ``1.md`` -> topic ``"1"``).
 
 ```bash

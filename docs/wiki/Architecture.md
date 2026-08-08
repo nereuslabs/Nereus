@@ -1,4 +1,4 @@
-# Архитектура
+# Архититектура
 
 ```
 main.py ──► core.factory.build_nereus_graph()
@@ -14,7 +14,7 @@ main.py ──► core.factory.build_nereus_graph()
                  ▼
              llm.inference  (StructuredInferenceClient, retry x2)
                  │
-        LLM_PROVIDER = stub | openrouter | ollama
+        LLM_PROVIDER = stub | openrouter
                  │
                  ▼
       ┌─────────────────────────────┐
@@ -34,7 +34,7 @@ main.py ──► core.factory.build_nereus_graph()
    `.sessions/{thread_id}.json`), `core/context.py` truncate/summarize.
 4. **Чекпоинты** — `core/persistence.py` (sqlite/redis/memory), `checkpoint_*` env.
 5. **RAG (Step 4)** — `db/chroma.py:ChromaStore` + `retriever`‑узел в графе
-   (`_retrieve_chunks`), `llm/embed.py` (stub/sentence-transformers/ollama).
+   (`_retrieve_chunks`), `llm/embed.py` (stub/sentence-transformers/openrouter).
 6. **UI (Step 5)** — `src/nereus/ui/app.py` (Chainlit Web UI, `:7457`).
 
 ## Конфиг

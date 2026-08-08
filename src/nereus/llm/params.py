@@ -20,64 +20,20 @@ class ModelParams:
     json_mode: bool = False
 
 
-def _env_float(name: str, default: float) -> float:
-    import os
-
-    raw = os.environ.get(name)
-    if not raw:
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        return default
-
-
-def _env_int(name: str, default: int) -> int:
-    import os
-
-    raw = os.environ.get(name)
-    if not raw:
-        return default
-    try:
-        return int(raw)
-    except ValueError:
-        return default
-
-
 def role_params(role: AgentRole) -> ModelParams:
-    """Per-role generation defaults, overridable via environment."""
-    temp_override = _env_float("OLLAMA_TEMPERATURE", -1.0)
-    max_override = _env_int("OLLAMA_MAX_TOKENS", -1)
+    """Per-role generation defaults.
 
+    The legacy ``OLLAMA_TEMPERATURE`` / ``OLLAMA_MAX_TOKENS`` env overrides were
+    dropped together with the legacy Ollama provider (#46 / Y1); use the real
+    provider's own configuration to tune sampling.
+    """
     defaults: dict[AgentRole, ModelParams] = {
-        AgentRole.COACH: ModelParams(
-            temperature=0.5, max_tokens=2048, json_mode=True
-        ),
-        AgentRole.TUTOR: ModelParams(
-            temperature=0.6, max_tokens=4096, json_mode=True
-        ),
-        AgentRole.EXAMINER: ModelParams(
-            temperature=0.0, max_tokens=1024, json_mode=True
-        ),
-        AgentRole.SUMMARIZER: ModelParams(
-            temperature=0.1, max_tokens=512, json_mode=False
-        ),
+        AgentRole.COACH: ModelParams(temperature=0.5, max_tokens=2048, json_mode=True),
+        AgentRole.TUTOR: ModelParams(temperature=0.6, max_tokens=4096, json_mode=True),
+        AgentRole.EXAMINER: ModelParams(temperature=0.0, max_tokens=1024, json_mode=True),
+        AgentRole.SUMMARIZER: ModelParams(temperature=0.1, max_tokens=512, json_mode=False),
     }
-    params = defaults[role]
-    kwargs: dict = {}
-    if 0.0 <= temp_override <= 1.0:
-        kwargs["temperature"] = temp_override
-    if max_override > 0:
-        kwargs["max_tokens"] = max_override
-    if kwargs:
-        params = ModelParams(
-            temperature=kwargs.get("temperature", params.temperature),
-            max_tokens=kwargs.get("max_tokens", params.max_tokens),
-            top_p=params.top_p,
-            repeat_penalty=params.repeat_penalty,
-            json_mode=params.json_mode,
-        )
-    return params
+    return defaults[role]
 
 
 def params_for(role: AgentRole) -> ModelParams:

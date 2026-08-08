@@ -27,7 +27,7 @@ Nereus построен как зацикленный автомат из трё
 Реализовано на текущем этапе:
 - полный циклический граф LangGraph с условным роутингом (`PASS`/`RETRY`/`END`);
 - human-in-the-loop через `interrupt` (интерактивный режим);
-- **абстракция LLM‑провайдера** (`LLMProvider`: `OpenRouterProvider` + `OllamaProvider` + `StubLLMProvider`) с фабрикой `build_nereus_graph()`; агенты генерируют roadmap/материалы/оценки через модель, с fallback на детерминированные заглушки без сети;
+- **абстракция LLM‑провайдера** (`LLMProvider`: `OpenRouterProvider` + `StubLLMProvider`) с фабрикой `build_nereus_graph()`; агенты генерируют roadmap/материалы/оценки через модель, офлайн‑stub — детерминированно без сети; при недоступности LLM сервис сообщает «Сервис временно недоступен» (#44/#45);
 - **сло́й промптов и схем**: реестр ролей/промптов (`llm/prompts.py`), Pydantic‑контракты ответов (`llm/schema.py`), параметры модели (`llm/params.py`), inference‑клиент с ретраями (`llm/inference.py`);
 - **RAG‑сло́й**: протоколы `Embedder` и `Retriever` (`llm/embed.py`, `llm/retriever.py`), `ChromaStore` (`db/chroma.py`), retrieval, проинтегрированный в узлы `tutor_*` (`core/graph.py`);
 - **память сессии** (`core/session.py` `LearningSession`) с агрегацией слабых мест, `session_brief`‑преамбулой, `dump`/`load`, `messages` и `trim_context`;
@@ -56,35 +56,24 @@ OPENROUTER_MODEL=openrouter/free   # или конкретная платная 
 
 > **Примечание про `openrouter/free`.** Свободные модели выбираются роутером в момент
 > запроса; реальная модель возвращается в `response.model` и кэшируется в `last_model`.
-> Лимиты бесплатных моделей: ~20 RPM / ~50 запросов в сутки без кредитов
+> Лимиты бесплатных моделей: ~20 RPM / ~50 запросов в сутни без кредитов
 > (или ~1000 RPD при наличии кредитов). При 401/402/403 API‑сообщает об ошибке, и
-> агенты переходят на детерминированный `stub`‑fallback (без сети).
+> агенты сообщают «Сервис временно недоступен», не падая (#44/#45).
 
 > **Без ключа?** Если `LLM_PROVIDER=openrouter`, но `OPENROUTER_API_KEY` пустой
 > (например, в Docker без env‑переменной), сервис стартует в офлайн‑режиме `stub`
 > с предупреждением в логах — UI и CLI не падают. Чтобы включить OpenRouter, задайте
 > ключ: `OPENROUTER_API_KEY=<key> docker compose up -d --build ui`.
 
-Для локального/Cloud Ollama (наследие, deprecated):
-```bash
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=https://<your-ollama-host>
-OLLAMA_MODEL=gemma4:31b
-OLLAMA_API_KEY=...
-```
-
 Дополнительные параметры (опционально, fallback на defaults в `llm/params.py`):
 ```bash
-OLLAMA_TEMPERATURE=0.2      # переопределение temperature
-OLLAMA_MAX_TOKENS=4096      # переопределение max_tokens
 CONTEXT_MAX_TOKENS=8000     # бюджет окна истории сообщений
 ```
 
 Параметры RAG (по умолчанию `EMBEDDING_PROVIDER=stub` — без сети, используются fake‑векторы для офлайн‑демо):
 ```bash
-EMBEDDING_PROVIDER=stub                       # "stub" | "sentence_transformers" | "openrouter" | "ollama"
+EMBEDDING_PROVIDER=stub                       # "stub" | "sentence_transformers" | "openrouter"
 SENTENCE_TRANSFORMERS_MODEL=sentence-transformers/all-MiniLM-L6-v2
-OLLAMA_EMBED_MODEL=nomic-embed-text           # только для EMBEDDING_PROVIDER=ollama
 OPENROUTER_EMBED_MODEL=openai/text-embedding-3-small  # только для EMBEDDING_PROVIDER=openrouter
 RETRIEVER_TOP_K=5
 CHROMADB_HOST=localhost
@@ -137,31 +126,23 @@ LLM_PROVIDER=stub python -m nereus.scripts.eval_chain --dry-run --skill "Python"
 # OpenRouter (рекомендуется) — trace в artifacts/run.jsonl
 LLM_PROVIDER=openrouter OPENROUTER_API_KEY=<key> OPENROUTER_MODEL=openrouter/free \
   python -m nereus.scripts.eval_chain --skill "Python" --submission "this is good"
-
-# Ollama (наследие)
-LLM_PROVIDER=ollama OLLAMA_BASE_URL=http://localhost:11434 \
-  OLLAMA_MODEL=gemma4:31b \
-  python -m nereus.scripts.eval_chain --skill "Python" --submission "this is good"
 ```
 
 ### Живые тесты против реального LLM
 
-Тест `tests/integration/test_live_openrouter.py` (и `test_live_ollama.py`) выполняются
+Тест `tests/integration/test_live_openrouter.py` выполняется
 **только** при включённом флаге, чтобы CI оставалась офлайн‑детерминированной:
 
 ```bash
 # OpenRouter
 NEREUS_RUN_LIVE=1 LLM_PROVIDER=openrouter OPENROUTER_API_KEY=<key> \
   OPENROUTER_MODEL=openrouter/free pytest -m "not skip" tests/integration/test_live_openrouter.py
-
-# Ollama (наследие)
-NEREUS_RUN_LIVE=1 LLM_PROVIDER=ollama OLLAMA_MODEL=gemma4:31b pytest -m "not skip" tests/integration/test_live_ollama.py
 ```
 
 ## Быстрый старт
 
 ```bash
-# Локальный запуск: CLI‑прототип (human-in-the-loop через input)
+# Локальный запуск: CLI‑прототип (human-in-the-loop через input; офлайн по умолчанию)
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
@@ -177,10 +158,6 @@ chainlit run src/nereus/ui/app.py
 # OpenRouter (рекомендуется): агрегатор, ничего локально не тащить
 LLM_PROVIDER=openrouter OPENROUTER_API_KEY=<key> python main.py
 
-# Локальная/Cloud модель Ollama (наследие, deprecated)
-ollama pull gemma4:31b
-LLM_PROVIDER=ollama python main.py
-
 # Через Docker (сервис nereus-ui на http://localhost:7457)
 docker compose up -d --build ui
 docker compose --profile ragger run --rm ingest   # загрузить материалы в ChromaDB
@@ -191,7 +168,7 @@ docker compose --profile ragger run --rm ingest   # загрузить мате�
 `src/nereus/ui/app.py` — диалоговый web‑клиент: собирает профиль, стримит roadmap →
 material → assessment, задаёт вопросы экзаменатора и возобновляет граф через
 `Command(resume=...)`. Поддерживает офлайн‑режим (`LLM_PROVIDER=stub`) и реальную
-модель Ollama. Состояние сессии (material, retrieved_chunks, assessment) рендерится
+модель через OpenRouter. Состояние сессии (material, retrieved_chunks, assessment) рендерится
 по‑шагово; `thread_id` хранится в `cl.user_session` для cross‑restart resume
 (требует persistent checkpointer — см. issue #16).
 
@@ -202,11 +179,6 @@ chainlit run src/nereus/ui/app.py
 # OpenRouter (рекомендуется): чат + эмбеддинги через агрегатор
 LLM_PROVIDER=openrouter OPENROUTER_API_KEY=<key> \
   EMBEDDING_PROVIDER=openrouter \
-  chainlit run src/nereus/ui/app.py
-
-# Ollama + ChromaDB / sentence-transformers (наследие)
-LLM_PROVIDER=ollama OLLAMA_BASE_URL=http://localhost:11434 \
-  EMBEDDING_PROVIDER=sentence_transformers CHROMADB_HOST=localhost \
   chainlit run src/nereus/ui/app.py
 ```
 
@@ -241,14 +213,13 @@ docker compose up -d ui                             # Web UI на http://localho
 Формат файла материала: `*.md` в `--materials` (`<topic_id>.md`, где `topic_id` —
 ведущие цифры имени файла, совпадают с `RoadmapTopic.id`, напр. `1.md` → тема 1).
 
-#### Гибрид: LLM в Cloud, эмбеддинги тоже Cloud
+#### Cloud: чат + эмбеддинги через OpenRouter
 
-Раньше чат‑LLM шёл через Ollama Cloud, а эмбеддинги — через локальный `ollama serve`
-(«гибрид», чтобы не платить за эмбеддинги в Cloud). С переходом на **OpenRouter** этот
-разворот стал избыточным: чат и эмбеддинги оба идут через один `OPENROUTER_API_KEY`,
-а `openrouter/free` покрывает лимиты для демо‑трафика. Оллама‑гибрид сохранён как
-наследие — задайте `LLM_PROVIDER=ollama` + `EMBEDDING_PROVIDER=ollama` и
-`OLLAMA_EMBED_BASE_URL` при необходимости.
+Чат и эмбеддинги оба идут через один `OPENROUTER_API_KEY`; `openrouter/free`
+покрывает лимиты для демо‑трафика (платные модели — по‑требности). Ранее чат
+шёл через Ollama Cloud, а эмбеддинги — через локальный `ollama serve`
+(«гибрид», чтобы не платить за эмбеддинги в Cloud); после миграции на OpenRouter
+этот разворот стал избыточным и удалён (#46).
 
 ```bash
 # OpenRouter — один токен для чата и эмбеддингов
@@ -282,18 +253,17 @@ src/nereus/
 │   └── context.py         # truncate_messages / summarize_history (RLHF‑ready)
 │   └── db/
 │       └── chroma.py      # ChromaStore (upsert/search по темам)
-├── agents/                # Coach / Tutor / Examiner (структурный inference + stub fallback)
+├── agents/                # Coach / Tutor / Examiner (structured inference; offline‑stub fallback)
 ├── llm/
 │   ├── base.py            # LLMProvider (абстракция)
-│   ├── ollama.py          # /api/chat клиент (base_url/model/timeout observability)
 │   ├── stub.py            # in-memory LLM‑провайдер (тесты/без сети)
 │   ├── schema.py          # Pydantic‑контракты ответов + parse_structured
-│   ├── params.py          # ModelParams + per-role таблица + env overrides
+│   ├── params.py          # ModelParams + per-role таблица
 │   ├── prompts.py         # реестр system‑prompts + билдеры с session_brief
-│   ├── inference.py       # StructuredInferenceClient (ретраи + LLMOutputError)
-│   ├── factory.py         # build_llm_provider (stub | openrouter | ollama)
+│   ├── inference.py       # StructuredInferenceClient (ретраи + LLMUnavailableError)
+│   ├── factory.py         # build_llm_provider (stub | openrouter)
 │   ├── openrouter.py      # OpenRouter chat LLM provider + OpenRouterError
-│   ├── embed.py           # Embedder (stub | sentence_transformers | openrouter | ollama)
+│   ├── embed.py           # Embedder (stub | sentence_transformers | openrouter)
 │   └── retriever.py       # Retriever (stub | ChromaRetriever) + RetrievedChunk
 └── ui/app.py              # Chainlit Web UI driver (Step 5)
 ```

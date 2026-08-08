@@ -21,8 +21,11 @@ class StubLLMProvider(LLMProvider):
     """In-memory provider used for tests and when no real API is configured.
 
     The response logic is pluggable via ``responder`` so tests can simulate
-    structured JSON output from a model.
+    structured JSON output from a model. Marked ``is_offline=True`` so agents
+    route to deterministic stub generation instead of calling a model (#44/#45).
     """
+
+    is_offline: bool = True
 
     def __init__(self, responder: StubResponder | None = None) -> None:
         self._responder = responder or echo_responder

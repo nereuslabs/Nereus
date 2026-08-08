@@ -7,7 +7,7 @@ from typing import Any, Callable, Optional
 from nereus.agents.base import BaseAgent
 from nereus.core.session import LearningSession
 from nereus.core.state import Assessment, NereusState, Verdict
-from nereus.llm.inference import LLMOutputError, StructuredInferenceClient
+from nereus.llm.inference import StructuredInferenceClient, is_offline_inference
 from nereus.llm.params import AgentRole
 from nereus.llm.prompts import build_examiner_prompt
 from nereus.llm.schema import AssessmentOutput
@@ -23,11 +23,13 @@ Evaluator = Callable[[str, dict[str, Any]], SubmissionCheck]
 def default_evaluator(
     submission: str, context: dict[str, Any] | None = None
 ) -> SubmissionCheck:
-    """Deterministic fallback evaluator based on keywords.
+    """Deterministic evaluator used for OFFLINE runs (no real provider).
 
-    Dependency-free so the automaton can be tested before any real LLM
-    integration exists. Word-boundary matching prevents accidental matches
-    like "goodness" matching "good". Used when no LLM provider is configured.
+    Dependency-free so the automaton can be exercised without any network.
+    Word-boundary matching prevents accidental matches like "goodness"
+    matching "good". Only used when the provider is an offline ``StubLLMProvider``
+    (#44); a real, unreachable provider raises :class:`LLMUnavailableError`
+    instead of faking a score.
     """
     text = submission.lower()
     if re.search(r"\bgood\b", text):
@@ -41,9 +43,11 @@ class LLMEvaluator:
     """Evaluator backed by a structured inference client.
 
     Asks the model to grade the user's submission against the current task and
-    return a validated ``AssessmentOutput``. Falls back to
-    :func:`default_evaluator` if the model output cannot be parsed after
-    retries.
+    return a validated ``AssessmentOutput``. Offline (``StubLLMProvider`` / no
+    client) runs use :func:`default_evaluator` directly; a real provider that
+    cannot answer after retries raises :class:`LLMUnavailableError`, which the
+    UI surfaces as "service temporarily unavailable" instead of faking a score
+    (#44).
     """
 
     def __init__(self, inference: StructuredInferenceClient) -> None:
@@ -64,25 +68,21 @@ class LLMEvaluator:
             session=session,
             retrieved=context.get("retrieved"),
         )
-        try:
-            result: AssessmentOutput = self._inference.generate(
-                messages, role=AgentRole.EXAMINER, output_model=AssessmentOutput
-            )
-            return float(result.score), str(result.feedback), list(result.weak_areas)
-        except LLMOutputError:
-            logger.warning(
-                "LLM evaluation failed; falling back to deterministic evaluator."
-            )
+        if is_offline_inference(self._inference):
             return default_evaluator(submission, context)
+        result: AssessmentOutput = self._inference.generate(
+            messages, role=AgentRole.EXAMINER, output_model=AssessmentOutput
+        )
+        return float(result.score), str(result.feedback), list(result.weak_areas)
 
 
 class ExaminerAgent(BaseAgent):
     """Examiner Agent.
 
     Receives the user's submission for the current task, evaluates it (via an
-    injected evaluator — LLM or deterministic fallback) and produces an
-    ``Assessment`` with a ``PASS``/``RETRY`` verdict plus feedback and weak
-    areas used by the router to decide the next step.
+    injected evaluator — LLM or the offline deterministic evaluator) and
+    produces an ``Assessment`` with a ``PASS``/``RETRY`` verdict plus feedback
+    and weak areas used by the router to decide the next step.
     """
 
     def __init__(

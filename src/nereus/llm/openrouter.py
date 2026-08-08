@@ -23,12 +23,13 @@ _CLOSE_TAG = chr(60) + chr(47) + "think" + chr(62)
 
 
 class OpenRouterError(LLMOutputError):
-    """Non-recoverable OpenRouter API error (auth/balance/blocked/model-down).
+    """OpenRouter API request failure (auth/balance/blocked/model-down/transient).
 
-    Subclasses :class:`LLMOutputError` so the existing agent fallback
-    (``except LLMOutputError`` / ``except Exception`` in CoachAgent) treats an
-    OpenRouter failure the same as a malformed LLM response and transparently
-    falls back to the deterministic stub path.
+    Subclasses :class:`LLMOutputError`; ``StructuredInferenceClient.generate``
+    retries it (on top of the per-call retries already done by ``complete``)
+    and, on exhaustion, surfaces :class:`LLMUnavailableError` to the UI — which
+    shows the user 'service temporarily unavailable' instead of silently
+    fabricating a result (#44/#45).
     """
 
 

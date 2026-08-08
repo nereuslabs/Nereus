@@ -1,4 +1,4 @@
-"""CLI driver for the Nereus MVP learning automaton.
+"""CLI driver for the Nereus MVP learning automata.
 
 Runs the LangGraph pipeline in human-in-the-loop mode: the graph pauses at
 the examiner node, the user types their answer, and the run resumes until the
@@ -20,6 +20,7 @@ from nereus.config.settings import settings
 from nereus.core.factory import build_nereus_graph
 from nereus.core.persistence import build_checkpointer
 from nereus.core.state import UserLevel, UserProfile
+from nereus.llm.inference import LLMUnavailableError
 
 INTERRUPT_KEY = "__interrupt__"
 DEFAULT_MAX_RETRIES = 2
@@ -115,13 +116,21 @@ def main(argv: list[str] | None = None) -> int:
             profile.target_level,
         )
         config = {"configurable": {"thread_id": thread_id}}
-        final = graph.invoke(
-            {
-                "user_profile": profile,
-                "max_retries": DEFAULT_MAX_RETRIES,
-            },
-            config,
-        )
+        try:
+            final = graph.invoke(
+                {
+                    "user_profile": profile,
+                    "max_retries": DEFAULT_MAX_RETRIES,
+                },
+                config,
+            )
+        except LLMUnavailableError as exc:
+            logger.warning("LLM unavailable during run: %s", exc)
+            print(
+                "\n⚠️  Сервис временно недоступен: LLM недоступен "
+                "(проверьте ключ/баланс OpenRouter). Попробуйте позже."
+            )
+            return 1
 
     while INTERRUPT_KEY in final and final[INTERRUPT_KEY]:
         interrupt = final[INTERRUPT_KEY][0]
@@ -129,7 +138,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n[ Tutor ] {final.get('material', '')}")
         print(f"[ Examiner ] {task}")
         answer = input('Your answer (type "good" to pass): ').strip()
-        final = graph.invoke(Command(resume=answer), config)
+        try:
+            final = graph.invoke(Command(resume=answer), config)
+        except LLMUnavailableError as exc:
+            logger.warning("LLM unavailable during exam: %s", exc)
+            print(
+                "\n⚠️  Сервис временно недоступен во время экзамена. "
+                "Попробуйте позже."
+            )
+            return 1
 
     print("\n=== Roadmap completed! ===")
     roadmap = final.get("roadmap")

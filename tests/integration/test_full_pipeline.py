@@ -51,10 +51,8 @@ def test_retry_loop_reinvokes_examiner(base_state) -> None:
     assert len(calls) > 3
 
 
-def test_full_pipeline_with_llm_provider(base_state) -> None:
+def test_full_pipeline_with_llm_provider(base_state, fake_llm_provider) -> None:
     import json
-
-    from nereus.llm.stub import StubLLMProvider
 
     def responder(messages, **_):
         # Discriminate by the role-defining user message, not by system keywords
@@ -77,8 +75,10 @@ def test_full_pipeline_with_llm_provider(base_state) -> None:
             return json.dumps({"material": "mat", "task": "task"})
         return json.dumps({"score": 95, "feedback": "ok", "weak_areas": []})
 
-    graph = NereusGraph(provider=StubLLMProvider(responder=responder))
-    final = graph.invoke({**_input(base_state["user_profile"]), "user_submission": "answer"})
+    graph = NereusGraph(provider=fake_llm_provider(responder=responder))
+    final = graph.invoke(
+        {**_input(base_state["user_profile"]), "user_submission": "answer"}
+    )
 
     assert len(final["roadmap"].topics) == 2
     assert final["status"] == "completed"

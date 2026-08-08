@@ -1,7 +1,7 @@
 """Live (integration) tests for persistent checkpointer resume (issue #16).
 
 Guarded by ``NEREUS_RUN_LIVE`` so CI remains fast/offline unless explicitly
-enabled; mirrors ``tests/integration/test_live_ollama.py``.
+enabled; mirrors the OpenRouter live suite (``tests/integration/test_live_openrouter.py``).
 """
 
 from __future__ import annotations

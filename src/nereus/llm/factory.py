@@ -4,7 +4,6 @@ import logging
 
 from nereus.config.settings import settings
 from nereus.llm.base import LLMProvider
-from nereus.llm.ollama import OllamaProvider
 from nereus.llm.openrouter import OpenRouterProvider
 from nereus.llm.stub import StubLLMProvider
 
@@ -15,8 +14,7 @@ def build_llm_provider() -> LLMProvider:
     """Create the provider configured by the current settings.
 
     * ``llm_provider=openrouter`` -> OpenRouter unified API (cloud)
-    * ``llm_provider=ollama``     -> real native Ollama HTTP client (legacy)
-    * otherwise                   -> in-memory stub (no network)
+    * otherwise                  -> in-memory stub (no network)
 
     Selecting ``openrouter`` without an ``OPENROUTER_API_KEY`` falls back to the
     offline stub (with a logged warning) so the UI/CLI still boot — matching the
@@ -38,12 +36,5 @@ def build_llm_provider() -> LLMProvider:
             timeout=settings.openrouter_timeout,
             http_referer=settings.openrouter_http_referer,
             title=settings.openrouter_title,
-        )
-    if settings.llm_provider == "ollama":
-        return OllamaProvider(
-            base_url=settings.ollama_base_url,
-            model=settings.ollama_model,
-            api_key=settings.ollama_api_key,
-            timeout=settings.ollama_timeout,
         )
     return StubLLMProvider()

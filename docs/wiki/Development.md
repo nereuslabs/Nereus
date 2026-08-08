@@ -14,7 +14,6 @@ pip install -e ".[dev]"      # dev = ruff + pytest
 |-----------|-----------|------------|
 | `stub`    | `LLM_PROVIDER=stub` | выбран по умолчанию, ничего не нужно |
 | `openrouter` | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL=openrouter/free` | ключ с openrouter.ai |
-| `ollama`  | `OLLAMA_BASE_URL=http://localhost:11434`, `OLLAMA_MODEL=qwen3:1.7b` | `ollama serve` |
 
 `openrouter` также служит провайдером эмбеддингов (`EMBEDDING_PROVIDER=openrouter`),
 заменяя тяжёлый локальный Ollama‑embed (~8 ГБ RAM).
@@ -24,7 +23,7 @@ pip install -e ".[dev]"      # dev = ruff + pytest
 ruff check .
 ruff format --check .
 pytest                       # 80 passed, 6 skipped (live)
-NEREUS_RUN_LIVE=1 pytest     # + OpenRouter/Ollama/Redis/Live embed
+NEREUS_RUN_LIVE=1 pytest     # + OpenRouter/Redis/Live embed
 ```
 
 ## Хранилище

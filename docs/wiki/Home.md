@@ -42,7 +42,7 @@ docker compose up -d --build ui
 ```bash
 ruff check . && ruff format --check .
 pytest                                    # 99 passed, 2 skipped (live)
-NEREUS_RUN_LIVE=1 pytest                  # + OpenRouter/Ollama/Redis/SQLite live
+NEREUS_RUN_LIVE=1 pytest                  # + OpenRouter/Redis/SQLite live
 ```
 
 Ссылки: [Architecture](Architecture.md) | [Roadmap](Roadmap.md) | [Development](Development.md) | [Migration guide](MIGRATE.md)
@@ -50,10 +50,8 @@ NEREUS_RUN_LIVE=1 pytest                  # + OpenRouter/Ollama/Redis/SQLite liv
 ### Конфиг (.env, все опциональны)
 | Параметр | Знач. по умолчанию | Описание |
 |---|---|---|
-| `LLM_PROVIDER` | `stub` | `stub \| openrouter \| ollama` |
-| `EMBEDDING_PROVIDER` | `stub` | `stub \| sentence_transformers \| openrouter \| ollama` |
+| `LLM_PROVIDER` | `stub` | `stub \| openrouter` |
+| `EMBEDDING_PROVIDER` | `stub` | `stub \| sentence_transformers \| openrouter` |
 | `CHECKPOINTER` | `memory` | `memory \| sqlite \| redis` (default `memory`, офлайн) |
 | `SESSION_PATH` | `.sessions/{thread_id}.json` | файл сессии |
 | `CHROMADB_HOST` | `localhost` | ChromaDB для RAG |
-
-

@@ -74,59 +74,6 @@ class SentenceTransformerEmbedder:
         return [[float(x) for x in vec] for vec in vecs]
 
 
-class OllamaEmbedder:
-    """Embedder that routes through a local/remote Ollama server."""
-
-    def __init__(
-        self,
-        base_url: str | None = None,
-        model: str | None = None,
-        timeout: float = 30.0,
-        api_key: str | None = None,
-    ) -> None:
-        import httpx  # local import -> optional at runtime
-
-        self._client = httpx.Client(timeout=timeout)
-        self._base_url = (
-            base_url or (settings.ollama_embed_base_url or settings.ollama_base_url)
-        ).rstrip("/")
-        self.model = model or settings.ollama_embed_model
-        # Bearer token required by Ollama Cloud (ollama.com). Local Ollama
-        # (localhost:11434) ignores the header, so this is safe to always send.
-        self._api_key = api_key or settings.ollama_api_key
-        self.dim: int = DEFAULT_DIM
-
-    def embed(self, text: str) -> list[float]:
-        return self._request([text])[0]
-
-    def embed_many(self, texts: Sequence[str]) -> list[list[float]]:
-        return self._request(list(texts))
-
-    def _headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
-        return headers
-
-    def _request(self, texts: list[str]) -> list[list[float]]:
-        resp = self._client.post(
-            f"{self._base_url}/api/embed",
-            headers=self._headers(),
-            json={"model": self.model, "input": texts},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        embeddings = data.get("embeddings") or []
-        if len(embeddings) != len(texts):
-            raise RuntimeError(
-                f"Ollama embed returned {len(embeddings)} vectors for {len(texts)} inputs"
-            )
-        return [[float(x) for x in vec] for vec in embeddings]
-
-    def close(self) -> None:
-        self._client.close()
-
-
 class OpenRouterEmbedder:
     """Embedder backed by the OpenRouter embeddings endpoint.
 
@@ -189,9 +136,6 @@ def build_embedder() -> Embedder:
     if kind == "sentence_transformers":
         logger.info("embedding provider: sentence_transformers")
         return SentenceTransformerEmbedder()
-    if kind == "ollama":
-        logger.info("embedding provider: ollama (%s)", settings.ollama_embed_model)
-        return OllamaEmbedder()
     if kind == "openrouter":
         if not settings.openrouter_api_key:
             logger.warning(

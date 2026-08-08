@@ -41,7 +41,7 @@ class OpenRouterProvider(LLMProvider):
     available free model at request time. The actual model used is echoed back
     in the response (``response.model``) and cached on ``last_model``.
 
-    Unlike ``OllamaProvider`` (Ollama's ``/api/chat`` schema), OpenRouter uses
+    Unlike the legacy Ollama ``/api/chat`` schema, OpenRouter uses
     top-level ``temperature``/``max_tokens``/``top_p`` and the OpenAI
     ``response_format`` field for JSON / structured mode.
 
@@ -77,7 +77,7 @@ class OpenRouterProvider(LLMProvider):
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=timeout)
 
-        # Mirrors OllamaProvider: request-scoped trace consumed by
+        # Request-scoped trace consumed by
         # scripts/eval_chain.py (``inference.calls``).
         self.calls: list[dict[str, Any]] = []
         # The model actually used (for openrouter/free the router picks one).

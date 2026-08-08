@@ -45,20 +45,6 @@ def build_nereus_graph(
         provider = build_llm_provider()
 
     logger.info("Nereus provider resolved: %s", _provider_info(provider))
-    if provider.__class__.__name__ == "OllamaProvider":
-        try:
-            import urllib.error
-            import urllib.request
-
-            urllib.request.urlopen(f"{provider.base_url}/api/tags", timeout=3.0)
-            logger.info("Ollama endpoint reachable: %s", provider.base_url)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "Ollama endpoint unreachable at %s (%s); agents will fall back "
-                "to deterministic stubs where possible.",
-                getattr(provider, "base_url", None),
-                exc,
-            )
 
     resolved_checkpointer = checkpointer if checkpointer is not None else build_checkpointer()
     graph = NereusGraph(

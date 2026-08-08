@@ -1,9 +1,47 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from nereus.config import settings as settings_module
 from nereus.core.state import Roadmap, RoadmapTopic, UserLevel, UserProfile
+from nereus.llm.base import LLMProvider
+
+
+class FakeLLMProvider(LLMProvider):
+    """Non-stub LLM test double that drives the real LLM path in agents.
+
+    Unlike ``StubLLMProvider`` (``is_offline=True``), this is treated as a real
+    provider — so coach/tutor/examiner call ``generate`` and exercise the
+    retry/availability contract (#44/#45) instead of falling back to
+    deterministic stubs. Use it to mock provider behaviour in tests.
+    """
+
+    is_offline: bool = False
+
+    def __init__(self, responder, *, calls: list[dict[str, Any]] | None = None) -> None:
+        self._responder = responder
+        self.calls: list[dict[str, Any]] = calls if calls is not None else []
+
+    def complete(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        temperature: float = 0.2,
+        max_tokens: int = 4096,
+        json_mode: bool = False,
+    ) -> str:
+        self.calls.append({"messages": messages, "json_mode": json_mode})
+        return self._responder(
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            json_mode=json_mode,
+        )
+
+    def close(self) -> None:
+        pass
 
 
 @pytest.fixture(autouse=True)
@@ -35,6 +73,12 @@ def _force_stub_offline(monkeypatch, request) -> None:
     monkeypatch.setattr(s, "llm_provider", "stub")
     monkeypatch.setattr(s, "embedding_provider", "stub")
     monkeypatch.setattr(s, "checkpoint_backend", "sqlite")
+
+
+@pytest.fixture
+def fake_llm_provider():
+    """``FakeLLMProvider`` class (use as ``fake_llm_provider(responder=...)``)."""
+    return FakeLLMProvider
 
 
 @pytest.fixture

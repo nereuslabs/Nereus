@@ -19,6 +19,7 @@ from nereus.core.factory import build_nereus_graph
 from nereus.core.graph import NereusGraph
 from nereus.core.persistence import CheckpointBackend, build_checkpointer
 from nereus.core.state import UserLevel, UserProfile
+from nereus.llm.inference import LLMUnavailableError
 
 logger = logging.getLogger("nereus.ui")
 
@@ -273,13 +274,35 @@ async def on_chat_start() -> None:
     app.profile = profile
     cl.user_session.set("app", app)
 
+    await _run_app_session(app, profile)
+
+
+async def _run_app_session(app: UIApp, profile: UserProfile) -> None:
+    """Drive a Nereus learning session end-to-end.
+
+    Wraps the coach → tutor → examiner pipeline. If the LLM provider cannot
+    serve a request after retries (:class:`LLMUnavailableError`) we surface a
+    clear "service temporarily unavailable" message and end the session cleanly
+    instead of crashing the chat (#44/#45).
+    """
     await cl.Message(
         content=f"🗺️  Строю дорожную карту для «{profile.goal}» "
         f"(уровни: {profile.current_level.value} → {profile.target_level.value})…"
     ).send()
-
-    interrupt = await app.astream({"user_profile": profile, "max_retries": DEFAULT_MAX_RETRIES})
-    await _run_exam_loop(app, interrupt)
+    try:
+        interrupt = await app.astream(
+            {"user_profile": profile, "max_retries": DEFAULT_MAX_RETRIES}
+        )
+        await _run_exam_loop(app, interrupt)
+    except LLMUnavailableError as exc:
+        logger.warning("LLM unavailable during session: %s", exc)
+        await cl.Message(
+            content=(
+                "⚠️  Сервис временно недоступен: LLM недоступен "
+                "(проверьте ключ/баланс OpenRouter). "
+                "Попробуйте позже или начните новый чат."
+            )
+        ).send()
 
 
 async def _run_exam_loop(app: UIApp, interrupt: dict | None) -> None:

@@ -263,3 +263,35 @@ async def test_ask_float_recovers_from_nonnumeric(patched_cl, monkeypatch):
 	monkeypatch.setattr(appmod, "_ask", fake_ask)
 	val = await appmod._ask_float("Часов в день [1]:", 1.0, minimum=0.0)
 	assert val == 2.5
+
+
+async def test_run_app_session_surfaces_unavailable_and_does_not_crash(
+	tmp_path, patched_cl, user_profile
+):
+	"""#44 regression: when the LLM provider is unavailable, _run_app_session
+	surfaces 'service temporarily unavailable' and ends the session cleanly
+	instead of crashing the chat."""
+	from nereus.core.persistence import CheckpointBackend, build_checkpointer
+	from nereus.llm.inference import LLMUnavailableError
+	from nereus.ui.app import UIApp, _run_app_session
+
+	class _UnavailableGraph:
+		def __init__(self) -> None:
+			self.cfg = None
+
+		async def astream(self, state, config=None, stream_mode="values"):
+			raise LLMUnavailableError("boom")
+			yield  # makes this an async generator (pragma: no cover)
+
+	app = UIApp(
+		graph=_UnavailableGraph(),
+		checkpointer=build_checkpointer(
+			CheckpointBackend.SQLITE, db_path=str(tmp_path / "ui.sqlite3")
+		),
+	)
+
+	# Must not raise: unavailability is surfaced to the user instead (#44/#45).
+	await _run_app_session(app, user_profile)
+
+	rendered = [m for m in patched_cl.messages if m]
+	assert any("Сервис временно недоступен" in m for m in rendered)

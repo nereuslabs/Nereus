@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from nereus.llm.inference import LLMOutputError, StructuredInferenceClient
+from nereus.llm.inference import LLMUnavailableError, StructuredInferenceClient
+from nereus.llm.openrouter import OpenRouterError
 from nereus.llm.params import AgentRole
 from nereus.llm.schema import AssessmentOutput, RoadmapOutput
 from nereus.llm.stub import StubLLMProvider
@@ -43,13 +44,25 @@ def test_inference_retries_on_bad_json_then_succeeds() -> None:
     assert len(client.calls) == 3  # 1 initial + 2 retries
 
 
-def test_inference_exhausts_retries_raises_llm_output_error() -> None:
+def test_inference_exhausts_retries_raises_llm_unavailable() -> None:
     client = StructuredInferenceClient(
         StubLLMProvider(responder=_responder("garbage <<< not json")), max_retries=2
     )
-    with pytest.raises(LLMOutputError):
+    with pytest.raises(LLMUnavailableError):
         client.generate([], role=AgentRole.COACH, output_model=RoadmapOutput)
     assert len(client.calls) == 3
+
+
+def test_inference_retries_on_provider_error_then_raises_unavailable() -> None:
+    def responder(messages, **_):
+        raise OpenRouterError("boom")
+
+    client = StructuredInferenceClient(
+        StubLLMProvider(responder=responder), max_retries=2
+    )
+    with pytest.raises(LLMUnavailableError):
+        client.generate([], role=AgentRole.COACH, output_model=RoadmapOutput)
+    assert len(client.calls) == 3  # attempt 1 + 2 retries, all provider errors
 
 
 def test_inference_strips_json_fences() -> None:

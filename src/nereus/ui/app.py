@@ -228,16 +228,15 @@ class UIApp:
         when its value differs from the last rendered value for this session.
         """
         material = state.get("material")
-        if material and material != self._last.get("material"):
+        if material:
+            # #60: material is NOT sent as a standalone "📚" bubble here. It is
+            # stashed and folded into the next AskUserMessage question-turn
+            # (see :meth:`exam_prompt`) so the assistant only "speaks" as a
+            # reply to the user — never proactively mid-stream. Retrieved chunks
+            # may be Pydantic ``RetrievedChunk`` objects (no ``.get``), so they
+            # are copied verbatim and accessed via :func:`_attr` later.
             self._last["material"] = material
-            chunks = state.get("retrieved_chunks") or []
-            if chunks:
-                refs = "\n".join(f"- {c.get('content', '')[:200]}" for c in chunks)
-                await cl.Message(
-                    content=f"📚  **Материал:**\n{material}\n\n**Полезные отрывки:**\n{refs}"
-                ).send()
-            else:
-                await cl.Message(content=f"📚  **Материал:**\n{material}").send()
+            self._last["retrieved_chunks"] = state.get("retrieved_chunks") or []
 
         assessment = state.get("assessment")
         if assessment is not None:
@@ -260,9 +259,36 @@ class UIApp:
         interrupt = _interrupt_value(state)
         if interrupt is not None:
             task = interrupt.get("task", "")
-            if task != self._last.get("interrupt_task"):
-                self._last["interrupt_task"] = task
-                await cl.Message(content=f"📝  **Экзаменатор:** {task}").send()
+            # #60: the exam task is surfaced ONCE — inside the AskUserMessage
+            # prompt (exam_prompt), NOT as a separate "📝" bubble, which
+            # duplicated the task up front (bug #2).
+            self._last["interrupt_task"] = task
+
+    def exam_prompt(self, task: str) -> str:
+        """Build the AskUserMessage prompt for an exam turn.
+
+        Bundles the current topic material and any retrieved RAG snippets
+        with the exam task into a single assistant question-turn -- instead
+        of emitting them as standalone proactive messages before the user
+        replies (#60, bugs 1 & 2). Retrieved chunks may be Pydantic
+        RetrievedChunk objects, so `content` is read via `_attr` (works for
+        dicts and objects), which also avoids the `.get` AttributeError on
+        Pydantic models.
+        """
+        book = chr(0x1f4da)  # material icon (📚 BOOKS)
+        memo = chr(0x1f4dd)  # examiner icon
+        nl = chr(10)
+        parts: list[str] = []
+        material = self._last.get("material", "")
+        if material:
+            parts.append(f"{book}  **Материал:** {material}")
+        chunks = self._last.get("retrieved_chunks") or []
+        if chunks:
+            refs = nl.join(f"- {_attr(c, 'content', '')[:200]}" for c in chunks)
+            parts.append(f"**Полезные отрывки:**{nl}{refs}")
+        parts.append(f"{memo}  **Экзаменатор:** {task}")
+        sep = nl + nl
+        return sep.join(parts) + sep + "Ваш ответ (или 'good', чтобы сдать):"
 
 
 @cl.on_chat_start
@@ -306,14 +332,24 @@ async def _run_app_session(app: UIApp, profile: UserProfile) -> None:
 
 
 async def _run_exam_loop(app: UIApp, interrupt: dict | None) -> None:
-    """Drive the human-in-the-loop examiner until the roadmap completes."""
+    """Drive the human-in-the-loop examiner until the roadmap completes.
+
+    Each assistant turn here IS the question to the user: material + retrieved
+    chunks + the exam task are bundled into the :class:`cl.AskUserMessage`
+    prompt via :meth:`UIApp.exam_prompt` (instead of being emitted as
+    proactive "📚/📝" bubbles up front — #60, bugs 1 & 2). An empty/blank answer
+    is re-asked (not graded) so a missing answer never surfaces as a 0/100
+    score (#60, bug 3)."""
     while interrupt is not None:
         task = interrupt.get("task", "")
-        answer = await cl.AskUserMessage(
-            content=f"[Экзаменатор] {task}\nВаш ответ (или 'good', чтобы сдать):",
-            timeout=900,
-        ).send()
+        prompt = app.exam_prompt(task)
+        answer = await cl.AskUserMessage(content=prompt, timeout=900).send()
         submission = _answer_text(answer).strip()
+        if not submission:
+            await cl.Message(
+                content="⚠️  Вы не ввели ответ. Попробуйте ответить на задачу."
+            ).send()
+            continue
         interrupt = await app.astream(Command(resume=submission))
 
     # Completion is announced once by UIApp.astream (on the final completed

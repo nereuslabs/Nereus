@@ -138,6 +138,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n[ Tutor ] {final.get('material', '')}")
         print(f"[ Examiner ] {task}")
         answer = input('Your answer (type "good" to pass): ').strip()
+        if not answer:
+            # Don't grade an empty answer (would score 0/100 "because no
+            # answer") — re-prompt the same task instead (#60, bug 3).
+            print("⚠️  Вы не ввели ответ. Попробуйте ответить на задачу.")
+            continue
         try:
             final = graph.invoke(Command(resume=answer), config)
         except LLMUnavailableError as exc:

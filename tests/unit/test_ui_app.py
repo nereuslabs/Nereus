@@ -78,13 +78,22 @@ def patched_cl(monkeypatch):
 
 	def _make_ask():
 		state = {"reply": "good"}
+		# Every AskUserMessage prompt actually rendered, in order — used to
+		# assert the exam task/material are bundled into the question-turn and
+		# not duplicated as separate bubbles (#60).
+		ask_contents: list[str] = []
 
 		def ask_user_message(**k):
 			content = k.get("content", "")
 
 			async def _send(*a, **kk):
+				ask_contents.append(content)
+				reply = state["reply"]
+				# A list models a sequence of typed replies (e.g. empty then a
+				# real answer) across several AskUserMessage calls.
+				reply = reply.pop(0) if isinstance(reply, list) else reply
 				return {
-					"output": state["reply"],
+					"output": reply,
 					"input": content,
 					"id": "ask-1",
 					"type": "text",
@@ -95,6 +104,7 @@ def patched_cl(monkeypatch):
 			return rec
 
 		ask_user_message.state = state
+		ask_user_message.ask_contents = ask_contents
 		return ask_user_message
 
 	ask = _make_ask()
@@ -121,9 +131,11 @@ async def test_astream_yields_chunks_and_returns_interrupt(patched_cl):
 
 
 async def test_render_deduplicates_material_and_assessment(patched_cl):
-	"""#51 regression: LangGraph re-emits persisted state on every chunk, so
-	material / assessment / exam task must each render exactly once and the
-	run must end with a single completion message."""
+	"""#51 + #60: LangGraph re-emits persisted state on every chunk, so the
+	assessment must render exactly once and the run ends with a single
+	completion. Per #60 the material / exam task are NOT emitted as proactive
+	assistant bubbles — they are stashed in ``self._last`` and surfaced inside
+	the AskUserMessage question-turn instead."""
 	graph = _FakeGraph()
 	app = UIApp(graph=graph)
 	await app.astream({"user_profile": object(), "max_retries": 2})
@@ -132,10 +144,96 @@ async def test_render_deduplicates_material_and_assessment(patched_cl):
 	def _count(sub: str) -> int:
 		return sum(1 for m in patched_cl.messages if m and sub in m)
 
-	assert _count("Материал") == 1, patched_cl.messages
+	# #60: no proactive material / exam-task bubbles.
+	assert _count("Материал") == 0, patched_cl.messages
+	assert _count("Экзаменатор") == 0, patched_cl.messages
+	# #51: assessment still rendered once (dedup) + single completion.
 	assert _count("Оценка") == 1, patched_cl.messages
-	assert _count("Экзаменатор") == 1, patched_cl.messages
 	assert _count("Дорогой ученик") == 1, patched_cl.messages
+	# Material + task stashed for exam_prompt (folded into the Ask), not re-sent.
+	assert app._last.get("material") == "Раздел 1"
+	assert app._last.get("interrupt_task") == "реши задачу"
+
+
+async def test_run_app_session_offline_renders_no_proactive_messages(
+	patched_cl, user_profile, tmp_path
+):
+	"""#60 (bugs 1, 2, 3): a real OFFLINE run must NOT emit proactive
+	`📚 Материал` / `📝 Экзаменатор` bubbles; material is bundled into the
+	AskUserMessage question-turn, the exam task is shown exactly once (inside
+	the Ask), and the assessment only appears AFTER the user's answer — never a
+	0/100 "because no answer"."""
+	from nereus.core.factory import build_nereus_graph
+	from nereus.ui.app import UIApp, _run_app_session
+
+	# The real graph is driven via LangGraph's *async* astream; the autouse
+	# conftest fixture pins the default saver to the sync SqliteSaver, which is
+	# not async-safe. Use an in-memory MemorySaver so interrupt/resume works
+	# in tests (the production default is also "memory").
+	cp = build_checkpointer(CheckpointBackend.MEMORY)
+	app = UIApp(
+		graph=build_nereus_graph(interactive=True, checkpointer=cp),
+		checkpointer=cp,
+	)
+	await _run_app_session(app, user_profile)
+
+	msgs = [m for m in patched_cl.messages if m]
+	# Bug 1: no proactive material / exam-task bubbles.
+	assert not any("📚" in m for m in msgs), msgs
+	assert not any("📝  **Экзаменатор**" in m for m in msgs), msgs
+	# Bug 3: no assessment/score is rendered before the first answer (the intro
+	# message carries no score) -- grades appear only after an AskUserMessage.
+	assert msgs and "Оценка" not in msgs[0], msgs
+	# Bug 2: 3 topics => 3 AskUserMessage question-turns; each bundles the exam
+	# task + material (shown once, inside the Ask, not as a separate bubble).
+	assert len(patched_cl.ask_contents) == 3, patched_cl.ask_contents
+	for prompt in patched_cl.ask_contents:
+		assert "Ваш ответ" in prompt, prompt
+		assert "Экзаменатор" in prompt, prompt     # task bundled once, inside the Ask
+		assert "Материал" in prompt, prompt         # material folded in, not a separate bubble
+	# The offline stub grades every "good" as 90/PASS -> identical (verdict,
+	# score, feedback) akeys are deduped by _render (#51) to a single
+	# assessment message; a live run with distinct per-topic scores renders one
+	# per topic. So assert >=1 post-answer grade + exactly one completion.
+	assert sum("Оценка" in m for m in msgs) >= 1, msgs
+	assert sum("Дорогой ученик" in m for m in msgs) == 1, msgs
+
+
+async def test_run_exam_loop_re_asks_on_empty_submission(patched_cl, tmp_path):
+	"""#60 (bug 3): an empty user answer must NOT be graded (which yields 0/100
+	'because no answer'); the assistant re-asks the same task instead."""
+	from nereus.ui.app import UIApp, _run_exam_loop
+
+	class _ResumeGraph:
+		def __init__(self) -> None:
+			self.resumes: list[Any] = []
+			self.cfg = None
+
+		async def astream(self, state, config=None, stream_mode="values"):
+			self.resumes.append(state)
+			# NB: a resumed turn arrives as a langgraph.types.Command (app.py
+			# builds it), not the local Command shadowed below — so discriminate
+			# by the `resume` attribute instead of isinstance.
+			if hasattr(state, "resume"):
+				yield {"status": "completed"}
+			else:
+				yield {"__interrupt__": [_Interrupt({"task": "реши задачу"})]}
+
+	cp = build_checkpointer(CheckpointBackend.MEMORY)
+	app = UIApp(graph=_ResumeGraph(), checkpointer=cp)
+	patched_cl.state["reply"] = ["", "good"]  # first send empty, then a real answer
+
+	interrupt = await app.astream({"user_profile": object(), "max_retries": 2})
+	await _run_exam_loop(app, interrupt)
+
+	resumes = app.graph.resumes
+	resume_values = [getattr(r, "resume", None) for r in resumes]
+	# No resumption with an empty submission; only the real answer is resumed.
+	assert "" not in resume_values, resume_values
+	assert "good" in resume_values, resume_values
+	# Clarification shown + the task re-asked (empty -> re-ask -> good).
+	assert any("не ввели ответ" in m for m in patched_cl.messages), patched_cl.messages
+	assert len(patched_cl.ask_contents) == 2, patched_cl.ask_contents
 
 
 def test_interrupt_value_parses_object():

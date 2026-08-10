@@ -57,6 +57,8 @@ def test_allowed_msgpack_models() -> None:
         "UserLevel",
         "LearningStatus",
         "RetrievedChunk",
+        "DiagnosticQuestion",
+        "WeaknessReport",
         "LearningSession",
     }
     assert allowed_names == expected

@@ -23,6 +23,8 @@ _ALLOWED_MSGPCK: list[tuple[str, str]] = [
     ("nereus.core.state", "UserLevel"),
     ("nereus.core.state", "LearningStatus"),
     ("nereus.core.state", "RetrievedChunk"),
+    ("nereus.core.state", "DiagnosticQuestion"),
+    ("nereus.core.state", "WeaknessReport"),
     ("nereus.core.session", "LearningSession"),
 ]
 
@@ -42,9 +44,7 @@ def _serde() -> Any:
     return JsonPlusSerializer(allowed_msgpack_modules=_ALLOWED_MSGPCK)
 
 
-def _sqlite(
-    serde: Any | None = None, db_path: str | None = None
-) -> Any:
+def _sqlite(serde: Any | None = None, db_path: str | None = None) -> Any:
     """Build a SqliteSaver backed by ``db_path`` or ``settings.checkpoint_db``."""
     from langgraph.checkpoint.sqlite import SqliteSaver
 
@@ -57,9 +57,7 @@ def _sqlite(
     return SqliteSaver(conn, serde=serde)
 
 
-def _redis(
-    *, redis_url: str | None = None, db_path: str | None = None
-) -> Any:
+def _redis(*, redis_url: str | None = None, db_path: str | None = None) -> Any:
     """Build a RedisSaver with the Nereus msgpack allowlist.
 
     ``RedisSaver.from_conn_string`` is a contextmanager that closes the client

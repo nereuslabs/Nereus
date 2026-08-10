@@ -2,6 +2,8 @@
 
 AI-тьютор, работающий по принципу автоматизированного учебного процесса — от Roadmap до **уверенных практических навыков**!
 
+[![Дорожная карта](https://img.shields.io/badge/Roadmap-Project%20Board-6f42c1?style=flat-square&logo=github&logoColor=white)](https://github.com/orgs/nereuslabs/projects/1)
+
 ## Архитектура
 
 Nereus построен как зацикленный автомат из трёх агентов, оркеструемых через **LangGraph** (human-in-the-loop):

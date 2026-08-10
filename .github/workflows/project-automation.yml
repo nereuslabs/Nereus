@@ -1,0 +1,67 @@
+name: Project Board Automation
+
+on:
+  issues:
+    types: [opened, reopened, transferred, labeled, closed]
+  pull_request:
+    types: [opened, reopened, closed]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  check-token:
+    name: Check project token
+    runs-on: ubuntu-latest
+    outputs:
+      has-token: ${{ steps.check.outputs.has-token }}
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.NEREUS_PROJECT_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "has-token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-token=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  add-issue:
+    name: Add issue to project
+    needs: check-token
+    if: needs.check-token.outputs.has-token == 'true' && github.event.issue
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: https://github.com/orgs/nereuslabs/projects/1
+          github-token: ${{ secrets.NEREUS_PROJECT_TOKEN }}
+          field: Status
+          field-value: Todo
+
+  add-pr:
+    name: Add pull request to project
+    needs: check-token
+    if: needs.check-token.outputs.has-token == 'true' && github.event.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: https://github.com/orgs/nereuslabs/projects/1
+          github-token: ${{ secrets.NEREUS_PROJECT_TOKEN }}
+          field: Status
+          field-value: In Review
+
+  close-item:
+    name: Mark closed item as Done
+    needs: check-token
+    if: needs.check-token.outputs.has-token == 'true' && (github.event.issue.state == 'closed' || github.event.pull_request.state == 'closed')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: https://github.com/orgs/nereuslabs/projects/1
+          github-token: ${{ secrets.NEREUS_PROJECT_TOKEN }}
+          field: Status
+          field-value: Done

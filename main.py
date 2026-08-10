@@ -18,6 +18,7 @@ from langgraph.types import Command
 
 from nereus.config.settings import settings
 from nereus.core.factory import build_nereus_graph
+from nereus.core.graph import NereusGraph
 from nereus.core.persistence import build_checkpointer
 from nereus.core.state import UserLevel, UserProfile
 from nereus.llm.inference import LLMUnavailableError
@@ -44,6 +45,39 @@ def build_profile() -> UserProfile:
     )
 
 
+def run_diagnostic_quiz(graph: NereusGraph, profile: UserProfile, config: dict) -> dict:
+    """Run the interactive diagnostic quiz and collect answers."""
+    print("\n=== Diagnostic Quiz ===")
+    print("Please answer the following questions (enter the option number):\n")
+
+    # Start the diagnostic by invoking the graph
+    from langgraph.types import Command
+
+    # We need to get the questions first
+    state = graph.app.get_state(config).values or {}
+    questions = state.get("diagnostic_questions", [])
+
+    if not questions:
+        # Run the diagnostic node to get questions
+        final = graph.invoke({"user_profile": profile, "max_retries": DEFAULT_MAX_RETRIES}, config)
+        questions = final.get("diagnostic_questions", [])
+
+    answers: dict[str, str] = {}
+    for q in questions:
+        print(f"\n{q.question}")
+        for i, opt in enumerate(q.options, 1):
+            print(f"  {i}. {opt}")
+        while True:
+            choice = input(f"Answer for question {q.id} (1-{len(q.options)}): ").strip()
+            if choice.isdigit() and 1 <= int(choice) <= len(q.options):
+                answers[q.id] = choice
+                break
+            print(f"  Please enter a number from 1 to {len(q.options)}.")
+
+    # Resume the graph with answers
+    return graph.invoke(Command(resume=answers), config)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="nereus",
@@ -64,6 +98,16 @@ def main(argv: list[str] | None = None) -> int:
         metavar="PATH",
         help="Path for LearningSession dump/load (default: .sessions/{thread_id}.json). "
         "Use with --resume to restore the session JSON alongside the checkpoint.",
+    )
+    parser.add_argument(
+        "--diagnostic",
+        action="store_true",
+        help="Run diagnostic quiz before building the roadmap (Issue #7)",
+    )
+    parser.add_argument(
+        "--no-diagnostic",
+        action="store_true",
+        help="Skip diagnostic quiz (overrides --diagnostic and env config)",
     )
     args = parser.parse_args(argv)
 
@@ -89,14 +133,25 @@ def main(argv: list[str] | None = None) -> int:
         thread_id = "nereus-demo"
     Path(session_path).parent.mkdir(parents=True, exist_ok=True)
 
+    # Determine whether to run diagnostic quiz (Issue #7)
+    run_diag = settings.run_diagnostic
+    if args.diagnostic:
+        run_diag = True
+    if args.no_diagnostic:
+        run_diag = False
+
     graph = build_nereus_graph(
-        interactive=True, checkpointer=checkpointer, session_path=session_path
+        interactive=True,
+        checkpointer=checkpointer,
+        session_path=session_path,
+        run_diagnostic=run_diag,
     )
     logger.info(
-        "starting run | thread_id=%s session=%s backend=%s",
+        "starting run | thread_id=%s session=%s backend=%s diagnostic=%s",
         thread_id,
         session_path,
         backend,
+        run_diag,
     )
 
     if args.resume:
@@ -110,20 +165,25 @@ def main(argv: list[str] | None = None) -> int:
     else:
         profile = build_profile()
         logger.info(
-            "starting run | skill=%r goal=%r target=%s",
+            "starting run | skill=%r goal=%r target=%s diagnostic=%s",
             profile.skill,
             profile.goal,
             profile.target_level,
+            run_diag,
         )
         config = {"configurable": {"thread_id": thread_id}}
+
+        initial_state: dict = {
+            "user_profile": profile,
+            "max_retries": DEFAULT_MAX_RETRIES,
+        }
+
         try:
-            final = graph.invoke(
-                {
-                    "user_profile": profile,
-                    "max_retries": DEFAULT_MAX_RETRIES,
-                },
-                config,
-            )
+            if run_diag:
+                # Run diagnostic first, then get user answers
+                final = run_diagnostic_quiz(graph, profile, config)
+            else:
+                final = graph.invoke(initial_state, config)
         except LLMUnavailableError as exc:
             logger.warning("LLM unavailable during run: %s", exc)
             print(
@@ -147,10 +207,7 @@ def main(argv: list[str] | None = None) -> int:
             final = graph.invoke(Command(resume=answer), config)
         except LLMUnavailableError as exc:
             logger.warning("LLM unavailable during exam: %s", exc)
-            print(
-                "\n⚠️  Сервис временно недоступен во время экзамена. "
-                "Попробуйте позже."
-            )
+            print("\n⚠️  Сервис временно недоступен во время экзамена. Попробуйте позже.")
             return 1
 
     print("\n=== Roadmap completed! ===")

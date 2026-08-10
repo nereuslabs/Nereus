@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # --- LearningSession dump/load (issue #22 runtime wiring) ---
     session_path: str = ".sessions/{thread_id}.json"  # pattern, {thread_id} substituted
 
+    # --- Diagnostic (Issue #7) ---
+    run_diagnostic: bool = False  # Run diagnostic quiz before roadmap generation
+    diagnostic_question_count: int = 5
+
     @property
     def redis_url(self) -> str:
         return f"redis://{self.redis_host}:{self.redis_port}/0"

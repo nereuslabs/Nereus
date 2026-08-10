@@ -20,9 +20,7 @@ SubmissionCheck = tuple[float, str, list[str]]
 Evaluator = Callable[[str, dict[str, Any]], SubmissionCheck]
 
 
-def default_evaluator(
-    submission: str, context: dict[str, Any] | None = None
-) -> SubmissionCheck:
+def default_evaluator(submission: str, context: dict[str, Any] | None = None) -> SubmissionCheck:
     """Deterministic evaluator used for OFFLINE runs (no real provider).
 
     Dependency-free so the automaton can be exercised without any network.
@@ -43,11 +41,11 @@ class LLMEvaluator:
     """Evaluator backed by a structured inference client.
 
     Asks the model to grade the user's submission against the current task and
-    return a validated ``AssessmentOutput``. Offline (``StubLLMProvider`` / no
-    client) runs use :func:`default_evaluator` directly; a real provider that
-    cannot answer after retries raises :class:`LLMUnavailableError`, which the
-    UI surfaces as "service temporarily unavailable" instead of faking a score
-    (#44).
+    return a validated ``AssessmentOutput``. When the inference client is None
+    or offline (``StubLLMProvider``) it falls back to :func:`default_evaluator`;
+    a real provider that cannot answer after retries raises
+    :class:`LLMUnavailableError`, which the UI surfaces as "service temporarily
+    unavailable" instead of faking a score (#44/#45).
     """
 
     def __init__(self, inference: StructuredInferenceClient) -> None:
@@ -85,6 +83,10 @@ class ExaminerAgent(BaseAgent):
     and weak areas used by the router to decide the next step.
     """
 
+    # Base passing threshold; adjusted by topic difficulty (Issue #7)
+    BASE_PASS_THRESHOLD: float = 70.0
+    MAX_DIFFICULTY_BONUS: float = 15.0  # difficulty 1.0 → threshold 85
+
     def __init__(
         self,
         evaluator: Optional[Evaluator] = None,
@@ -104,6 +106,15 @@ class ExaminerAgent(BaseAgent):
             else:
                 self._evaluator = default_evaluator
 
+    @classmethod
+    def _passing_threshold(cls, topic: Any) -> float:
+        """Adaptive passing threshold based on topic difficulty.
+
+        Higher difficulty topics require a higher score to pass.
+        """
+        difficulty = getattr(topic, "difficulty", 1.0)
+        return cls.BASE_PASS_THRESHOLD + (difficulty * cls.MAX_DIFFICULTY_BONUS)
+
     def assess(self, submission: str, state: NereusState) -> dict:
         topic = state["roadmap"].topics[state["current_topic_index"]]
         context = {
@@ -111,9 +122,11 @@ class ExaminerAgent(BaseAgent):
             "topic": topic.title,
             "session": state.get("session"),
             "retrieved": state.get("retrieved_chunks") or [],
+            "difficulty": getattr(topic, "difficulty", 1.0),
         }
         score, feedback, weak_areas = self._evaluator(submission, context)
-        verdict = Verdict.PASS if score >= 70.0 else Verdict.RETRY
+        pass_threshold = self._passing_threshold(topic)
+        verdict = Verdict.PASS if score >= pass_threshold else Verdict.RETRY
 
         assessment = Assessment(
             topic_id=topic.id,

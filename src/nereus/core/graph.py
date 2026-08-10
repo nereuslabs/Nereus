@@ -9,6 +9,7 @@ from langgraph.types import interrupt
 
 from nereus.agents.base import BaseAgent
 from nereus.agents.coach import CoachAgent
+from nereus.agents.diagnostic import DiagnosticAgent
 from nereus.agents.examiner import ExaminerAgent
 from nereus.agents.tutor import TutorAgent
 from nereus.core.router import ADVANCE_TUTOR, RETRY_TUTOR, route_after_exam
@@ -79,23 +80,29 @@ class NereusGraph:
         coach: BaseAgent | None = None,
         tutor: BaseAgent | None = None,
         examiner: BaseAgent | None = None,
+        diagnostic: BaseAgent | None = None,
         provider: LLMProvider | None = None,
         inference: StructuredInferenceClient | None = None,
         retriever: Retriever | None = None,
         checkpointer=None,
         interactive: bool = False,
         session_path: Path | str | None = None,
+        run_diagnostic: bool = False,
     ) -> None:
         inference = inference or (StructuredInferenceClient(provider) if provider else None)
         self._coach_agent = coach or CoachAgent(inference=inference, provider=provider)
         self._tutor_agent = tutor or TutorAgent(inference=inference, provider=provider)
         self._examiner_agent = examiner or ExaminerAgent(inference=inference, provider=provider)
+        self._diagnostic_agent = diagnostic or DiagnosticAgent(
+            inference=inference, provider=provider
+        )
         self._inference = inference
         self._retriever: Retriever | None = (
             retriever if retriever is not None else _default_retriever()
         )
         self._interactive = interactive
         self._session_path = Path(session_path) if session_path else None
+        self._run_diagnostic = run_diagnostic
         self._graph = self._build(checkpointer)
 
     # ------------------------------------------------------------------ #
@@ -172,9 +179,7 @@ class NereusGraph:
 
         query = state.get("session_brief") or state.get("task") or ""
         try:
-            return retriever.retrieve(
-                query=query, topic=topic, top_k=settings.retriever_top_k
-            )
+            return retriever.retrieve(query=query, topic=topic, top_k=settings.retriever_top_k)
         except Exception as exc:  # noqa: BLE001  retrieval must never sink a run
             logger.warning(
                 "RAG retrieval failed for topic %s; continuing without context: %s",
@@ -225,9 +230,62 @@ class NereusGraph:
     def _complete(self, state: NereusState) -> dict:
         return {"status": "completed"}
 
+    def _diagnostic_node(self, state: NereusState) -> dict:
+        """Run diagnostic quiz and store questions in state.
+
+        In interactive mode, interrupts for user answers (first pass).
+        On resume with answers, evaluates them and produces a weakness report.
+        In non-interactive mode, uses stub answers.
+        """
+        result = self._diagnostic_agent.run(state)
+        questions = result.get("diagnostic_questions", [])
+
+        # Check if we already have answers (resume after interrupt)
+        answers = state.get("user_diagnostic_answers")
+
+        if self._interactive and questions and not answers:
+            # First pass: interrupt to collect user answers
+            interrupt_payload = {"questions": [q.model_dump() for q in questions]}
+            # Use LangGraph interrupt to pause and collect answers on resume
+            received = interrupt(interrupt_payload)
+            # On resume, received contains the user's answers
+            if isinstance(received, dict):
+                answers = received
+            elif isinstance(received, str):
+                try:
+                    import json
+
+                    answers = json.loads(received)
+                except (json.JSONDecodeError, ValueError):
+                    answers = dict(received)  # noqa: E731
+            else:
+                answers = dict(received) if received else {}
+            result["user_diagnostic_answers"] = answers
+
+        # Either non-interactive (default), or interactive with answers received
+        if questions:
+            if not answers:
+                # Non-interactive: use stub answers (all option "1")
+                answers = {q.id: "1" for q in questions}
+                result["user_diagnostic_answers"] = answers
+
+            # Evaluate answers through the diagnostic agent
+            profile = state.get("user_profile")
+            if profile is not None:
+                weakness_report = self._diagnostic_agent.evaluate_answers(
+                    profile, questions, answers
+                )
+                result["weakness_report"] = weakness_report
+
+        return {
+            **result,
+            "user_diagnostic_answers": answers,
+        }
+
     def _build(self, checkpointer) -> StateGraph:
         builder = StateGraph(NereusState)
 
+        builder.add_node("diagnostic", self._diagnostic_node)
         builder.add_node("coach", self._coach_agent.run)
         builder.add_node("tutor_new", self._tutor_new)
         builder.add_node("tutor_retry", self._tutor_retry)
@@ -235,7 +293,12 @@ class NereusGraph:
         builder.add_node("examiner", self._examiner)
         builder.add_node("complete", self._complete)
 
-        builder.set_entry_point("coach")
+        if self._run_diagnostic:
+            builder.set_entry_point("diagnostic")
+            builder.add_edge("diagnostic", "coach")
+        else:
+            builder.set_entry_point("coach")
+
         builder.add_edge("coach", "tutor_new")
         builder.add_edge("tutor_new", "examiner")
         builder.add_edge("tutor_retry", "examiner")

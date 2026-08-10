@@ -38,10 +38,28 @@ class RoadmapTopic(BaseModel):
     id: str
     title: str
     description: str
+    difficulty: float = Field(default=1.0, ge=0.0, le=1.0)
+    prerequisites: list[str] = Field(default_factory=list)
+    estimated_hours: float = Field(default=1.0, ge=0.0)
 
 
 class Roadmap(BaseModel):
     topics: list[RoadmapTopic] = Field(default_factory=list)
+
+
+class DiagnosticQuestion(BaseModel):
+    """A single diagnostic question with multiple-choice options."""
+
+    id: str
+    question: str
+    options: list[str]
+
+
+class WeaknessReport(BaseModel):
+    """Result of evaluating diagnostic answers — identifies knowledge gaps."""
+
+    weak_areas: list[str] = Field(default_factory=list)
+    recommended_topics: list[str] = Field(default_factory=list)
 
 
 class Assessment(BaseModel):
@@ -82,5 +100,10 @@ class NereusState(TypedDict, total=False):
 
     # RAG context (filled in by the retriever node, see core/graph.py).
     retrieved_chunks: Optional[list[RetrievedChunk]]
+
+    # Diagnostic pre-roadmap (Issue #7).
+    diagnostic_questions: Optional[list[DiagnosticQuestion]]
+    user_diagnostic_answers: Optional[dict[str, str]]
+    weakness_report: Optional[WeaknessReport]
 
     messages: Annotated[list, add_messages]

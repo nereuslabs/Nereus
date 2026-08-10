@@ -8,6 +8,8 @@ class AgentRole(str, Enum):
     COACH = "coach"
     TUTOR = "tutor"
     EXAMINER = "examiner"
+    DIAGNOSTIC = "diagnostic"
+    WEAKNESS = "weakness"
     SUMMARIZER = "summarizer"
 
 
@@ -31,6 +33,8 @@ def role_params(role: AgentRole) -> ModelParams:
         AgentRole.COACH: ModelParams(temperature=0.5, max_tokens=2048, json_mode=True),
         AgentRole.TUTOR: ModelParams(temperature=0.6, max_tokens=4096, json_mode=True),
         AgentRole.EXAMINER: ModelParams(temperature=0.0, max_tokens=1024, json_mode=True),
+        AgentRole.DIAGNOSTIC: ModelParams(temperature=0.3, max_tokens=1024, json_mode=True),
+        AgentRole.WEAKNESS: ModelParams(temperature=0.4, max_tokens=1024, json_mode=True),
         AgentRole.SUMMARIZER: ModelParams(temperature=0.1, max_tokens=512, json_mode=False),
     }
     return defaults[role]

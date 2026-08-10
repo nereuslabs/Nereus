@@ -18,6 +18,7 @@ def _args(**kw) -> argparse.Namespace:
         out="artifacts/run.jsonl",
         log_level="INFO",
         dry_run=True,
+        diagnostic=False,
     )
     base.update(kw)
     return argparse.Namespace(**base)

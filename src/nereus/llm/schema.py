@@ -92,3 +92,30 @@ class AssessmentOutput(BaseModel):
 class SummaryOutput(BaseModel):
     summary: str
 
+
+class DiagnosticQuestionOutput(BaseModel):
+    id: str
+    question: str
+    options: list[str]
+
+
+class DiagnosticOutput(BaseModel):
+    questions: list[DiagnosticQuestionOutput]
+
+
+class WeaknessReportOutput(BaseModel):
+    weak_areas: list[str] = Field(default_factory=list)
+    recommended_topics: list[str] = Field(default_factory=list)
+
+
+class AdaptiveRoadmapTopicOutput(BaseModel):
+    id: str
+    title: str
+    description: str
+    difficulty: float = Field(default=1.0, ge=0.0, le=1.0)
+    prerequisites: list[str] = Field(default_factory=list)
+    estimated_hours: float = Field(default=1.0, ge=0.0)
+
+
+class AdaptiveRoadmapOutput(BaseModel):
+    topics: list[AdaptiveRoadmapTopicOutput]

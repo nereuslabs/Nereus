@@ -27,41 +27,48 @@ jobs:
             echo "has-token=false" >> "$GITHUB_OUTPUT"
           fi
 
-  add-issue:
-    name: Add issue to project
+  sync-project:
+    name: Sync issue/PR to project
     needs: check-token
-    if: needs.check-token.outputs.has-token == 'true' && github.event.issue
+    if: needs.check-token.outputs.has-token == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/add-to-project@v1.0.2
+      - uses: actions/github-script@v7
         with:
-          project-url: https://github.com/orgs/nereuslabs/projects/1
           github-token: ${{ secrets.NEREUS_PROJECT_TOKEN }}
-          field: Status
-          field-value: Todo
+          script: |
+            const PROJECT_ID = "PVT_kwDOEqfhoc4Bf4NK";
+            const FIELD_STATUS = "PVTSSF_lADOEqfhoc4Bf4NKzhaH3t0";
+            const OPT = {
+              "Todo": "81c0b234",
+              "In Review": "df0b8ed0",
+              "Done": "e3ef08db",
+            };
 
-  add-pr:
-    name: Add pull request to project
-    needs: check-token
-    if: needs.check-token.outputs.has-token == 'true' && github.event.pull_request
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/add-to-project@v1.0.2
-        with:
-          project-url: https://github.com/orgs/nereuslabs/projects/1
-          github-token: ${{ secrets.NEREUS_PROJECT_TOKEN }}
-          field: Status
-          field-value: In Review
+            const issue = context.payload.issue;
+            const pr = context.payload.pull_request;
+            const contentId = (issue || pr).node_id;
 
-  close-item:
-    name: Mark closed item as Done
-    needs: check-token
-    if: needs.check-token.outputs.has-token == 'true' && (github.event.issue.state == 'closed' || github.event.pull_request.state == 'closed')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/add-to-project@v1.0.2
-        with:
-          project-url: https://github.com/orgs/nereuslabs/projects/1
-          github-token: ${{ secrets.NEREUS_PROJECT_TOKEN }}
-          field: Status
-          field-value: Done
+            let status = "Todo";
+            if (pr) status = "In Review";
+            if ((issue && issue.state === "closed") || (pr && pr.state === "closed")) status = "Done";
+
+            const added = await github.graphql(`
+              mutation {
+                addProjectV2ItemById(input: { projectId: "${PROJECT_ID}", contentId: "${contentId}" }) {
+                  item { id }
+                }
+              }
+            `);
+            const itemId = added.addProjectV2ItemById.item.id;
+
+            await github.graphql(`
+              mutation {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: "${PROJECT_ID}",
+                  itemId: "${itemId}",
+                  fieldId: "${FIELD_STATUS}",
+                  value: { singleSelectOptionId: "${OPT[status]}" }
+                }) { projectV2Item { id } }
+              }
+            `);

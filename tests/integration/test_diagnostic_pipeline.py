@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import uuid
+
+from langgraph.types import Command
+
 from nereus.core.factory import build_nereus_graph
 from nereus.core.persistence import CheckpointBackend, build_checkpointer
 from nereus.core.state import Verdict, WeaknessReport
@@ -231,3 +236,150 @@ def test_interactive_diagnostic_interrupts_for_answers(base_state, fake_llm_prov
 
     # Should continue through the pipeline
     assert final["status"] == "completed" or "__interrupt__" in final
+
+
+# --------------------------------------------------------------------------- #
+# Interactive resume hardening (Issue #7, step 5 of the sprint)                #
+# --------------------------------------------------------------------------- #
+# `_diagnostic_node` resumes a LangGraph ``interrupt`` with whatever the caller
+# hands back via ``Command(resume=...)``. It must accept:
+#   * a dict of answers            -> the happy path
+#   * a JSON-encoded string        -> parsed via ``json.loads``
+#   * any other opaque string      -> previously crashed in ``dict(received)``
+# These three tests lock the hardened ``else / except`` behaviour down.
+
+
+def _diag_provider(fake_llm_provider):
+    """FakeLLMProvider that answers every diagnostic/role call deterministically."""
+
+    def responder(messages, **_):
+        for msg in messages:
+            if msg.get("role") == "system":
+                content = msg.get("content", "")
+                if "Create a short diagnostic quiz" in content:
+                    return json.dumps(
+                        {
+                            "questions": [
+                                {
+                                    "id": "q1",
+                                    "question": "Что такое цикл в Python?",
+                                    "options": ["for", "while", "if", "def"],
+                                },
+                                {
+                                    "id": "q2",
+                                    "question": "Что такое переменная?",
+                                    "options": ["значение", "тип", "функция", "класс"],
+                                },
+                            ]
+                        }
+                    )
+                if "Evaluate the user's answers" in content:
+                    return json.dumps(
+                        {"weak_areas": ["loops", "variables"], "recommended_topics": ["1", "2"]}
+                    )
+                if "learning coach" in content:
+                    return json.dumps(
+                        {
+                            "topics": [
+                                {
+                                    "id": "1",
+                                    "title": "T1",
+                                    "description": "d",
+                                    "difficulty": 0.5,
+                                    "prerequisites": [],
+                                    "estimated_hours": 1.0,
+                                },
+                                {
+                                    "id": "2",
+                                    "title": "T2",
+                                    "description": "d",
+                                    "difficulty": 0.7,
+                                    "prerequisites": ["1"],
+                                    "estimated_hours": 1.0,
+                                },
+                            ]
+                        }
+                    )
+                if "patient tutor" in content:
+                    return json.dumps({"material": "mat", "task": "task"})
+                if "strict examiner" in content:
+                    return json.dumps({"score": 95, "feedback": "good", "weak_areas": []})
+        # Examiner fallback for any remaining user-turn (submission grading).
+        return json.dumps({"score": 95, "feedback": "good", "weak_areas": []})
+
+    return fake_llm_provider(responder=responder)
+
+
+def _run_interactive_diagnostic(
+    graph, base_state, first_resume, submission: str = "this is good work"
+) -> dict:
+    """Drive an interactive diagnostic graph end-to-end and return final state.
+
+    1. invoke             -> pauses at the diagnostic ``interrupt`` (questions)
+    2. resume(first_resume) -> parses answers & builds the weakness report,
+        then lands at the examiner ``interrupt`` (first topic submission)
+    3. resume(submission) x N -> grades each topic until the run completes
+    """
+    config = {"configurable": {"thread_id": uuid.uuid4().hex}}
+    final = graph.invoke({**base_state}, config)
+    assert "__interrupt__" in final, "graph should pause at the diagnostic interrupt"
+
+    final = graph.invoke(Command(resume=first_resume), config)
+    guard = 0
+    while "__interrupt__" in final and guard < 16:
+        final = graph.invoke(Command(resume=submission), config)
+        guard += 1
+    return final
+
+
+def test_interactive_diagnostic_resume_accepts_dict_answers(base_state, fake_llm_provider) -> None:
+    """Regression lock: a dict resume of diagnostic answers completes the cycle."""
+    graph = build_nereus_graph(
+        interactive=True,
+        provider=_diag_provider(fake_llm_provider),
+        checkpointer=build_checkpointer(CheckpointBackend.MEMORY),
+        run_diagnostic=True,
+    )
+    final = _run_interactive_diagnostic(graph, base_state, {"q1": "1", "q2": "1"})
+
+    assert final["status"] == "completed"
+    assert len(final["roadmap"].topics) == 2
+    assert final["current_topic_index"] == 1
+    assert final["assessment"].verdict == Verdict.PASS
+    assert isinstance(final.get("weakness_report"), WeaknessReport)
+
+
+def test_interactive_diagnostic_resume_accepts_json_string(base_state, fake_llm_provider) -> None:
+    """The resume may arrive as a JSON string -> parsed via ``json.loads``."""
+    graph = build_nereus_graph(
+        interactive=True,
+        provider=_diag_provider(fake_llm_provider),
+        checkpointer=build_checkpointer(CheckpointBackend.MEMORY),
+        run_diagnostic=True,
+    )
+    final = _run_interactive_diagnostic(graph, base_state, json.dumps({"q1": "1", "q2": "1"}))
+
+    assert final["status"] == "completed"
+    assert final["assessment"].verdict == Verdict.PASS
+    assert isinstance(final.get("weakness_report"), WeaknessReport)
+
+
+def test_interactive_diagnostic_resume_ignores_malformed_string(
+    base_state, fake_llm_provider
+) -> None:
+    """A non-JSON, non-dict resume must NOT raise (previously ``dict(received)``).
+
+    With the hardened ``except`` (-> ``{}``) the node falls back to stub answers,
+    so the run still drains through diagnostics -> coach -> examiner to completion.
+    """
+    graph = build_nereus_graph(
+        interactive=True,
+        provider=_diag_provider(fake_llm_provider),
+        checkpointer=build_checkpointer(CheckpointBackend.MEMORY),
+        run_diagnostic=True,
+    )
+    final = _run_interactive_diagnostic(graph, base_state, "definitely-not-json-answers")
+
+    assert final["status"] == "completed"
+    assert final["assessment"].verdict == Verdict.PASS
+    assert isinstance(final.get("weakness_report"), WeaknessReport)

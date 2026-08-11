@@ -21,16 +21,30 @@ tests/
 ```
 
 ## Multi-user Sessions (P1, Issues #8/#57)
-- `UserStore` (`core/user_store.py`): SQLite-backed UserProfile storage, memory fallback
+- `UserStore` (`core/user_store.py`): `UserStore` (SQLite + memory fallback) and
+  `UserStoreRedis` (Redis hash per user, degrades to memory). `build_user_store()`
+  dispatches on `settings.user_storage` (`sqlite` | `redis` | `memory`).
 - `UserSession` (`core/session.py`): on-disk session snapshot at `SESSION_ROOT/{user_id}/{session_id}.json`
 - `NereusGraph`: accepts `session_id` + `user_id` params; loads/saves `UserSession` via `_load_user_session`/`_dump_session`
 - CLI: `--new-session`, `--session-id <id>`, `--user-id <id>`
-- Env: `USER_STORAGE`, `USER_DB_PATH`, `SESSION_ROOT`
+- Env: `USER_STORAGE` (`sqlite`/`redis`/`memory`), `USER_DB_PATH`, `REDIS_HOST`, `REDIS_PORT`, `SESSION_ROOT`
+
+## Adaptive Diagnostics (Issue #7)
+- `DiagnosticAgent` (`agents/diagnostic.py`): generates an adaptive quiz, evaluates
+  answers → `WeaknessReport`.
+- `NereusGraph(run_diagnostic=True)` prepends a `diagnostic → interrupt → coach`
+  entry so the roadmap is ordered by weak areas.
+- Examiner pass threshold is difficulty-scaled (`70 + difficulty*15`, clamped ≤ 85).
+- Opt-in via CLI `--diagnostic` / env `RUN_DIAGNOSTIC=true` / `DIAGNOSTIC_QUESTION_COUNT`.
+- Offline safety: the autouse fixture in `tests/conftest.py` pins `run_diagnostic=False`
+  so a developer `.env` cannot pull the diagnostic/interrupt path into hermetic tests.
 
 ## GitHub Flow
 - Feature branches from `develop`
 - PR targeting `develop`
-- CI: `ruff check` + `pytest` on push/PR
+- CI: `ruff check` + `ruff format --check` + `pytest` on push/PR
+- `develop` is the fast lane (CI + linear history); `main` is the release gate
+  (CI + 1 required review + linear history, protected).
 - Issues tracked on project board (GraphQL automation)
 
 ## Testing

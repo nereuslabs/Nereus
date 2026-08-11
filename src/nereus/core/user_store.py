@@ -14,7 +14,7 @@ import logging
 import sqlite3
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from nereus.core.state import UserProfile
 
@@ -139,6 +139,165 @@ class UserStore:
             except Exception as exc:  # noqa: BLE001
                 logger.warning("SQLite delete failed (%s); falling back to memory", exc)
         return self._mem.pop(user_id, None) is not None
+
+
+class UserStoreRedis:
+    """Redis-backed :class:`UserProfile` store (P1, issue #8/#57).
+
+    Each user is stored as a Redis hash at ``{namespace}:{user_id}`` with two
+    fields:
+
+    * ``profile`` — JSON of the :class:`UserProfile`
+    * ``created``  — epoch seconds (float)
+
+    Like :class:`UserStore`, it degrades to an in-process memory dict whenever
+    the configured Redis instance is unreachable, so production deployments fail
+    open instead of hard-erroring on a transient Redis blip.
+    """
+
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 6379,
+        *,
+        db: int = 0,
+        client: Any | None = None,
+        namespace: str = "users",
+    ) -> None:
+        self._namespace = namespace
+        self._mem: dict[str, UserProfile] = {}
+        self._use_redis = False
+        if client is not None:
+            # Explicit client (mainly for tests) — assume it speaks the redis-py
+            # hash + scan API with decode_responses=True semantics.
+            self._client = client
+            self._use_redis = bool(self._ping(client))
+        else:
+            try:
+                import redis
+
+                self._client = redis.Redis(
+                    host=host,
+                    port=port,
+                    db=db,
+                    decode_responses=True,
+                    socket_connect_timeout=2.0,
+                )
+                self._ping(self._client)
+                self._use_redis = True
+                logger.debug("UserStoreRedis initialised at %s:%s", host, port)
+            except Exception as exc:  # noqa: BLE001  — any failure → memory fallback
+                logger.warning("UserStoreRedis unavailable (%s); using memory fallback", exc)
+                self._client = None
+                self._use_redis = False
+
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _ping(client: Any) -> bool:
+        try:
+            return bool(client.ping())
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _key(self, user_id: str) -> str:
+        return f"{self._namespace}:{user_id}"
+
+    def _row_to_profile(self, row: dict[str, str] | None) -> UserProfile | None:
+        if not row:
+            return None
+        payload = row.get("profile")
+        if not payload:
+            return None
+        try:
+            return UserProfile.model_validate_json(payload)
+        except Exception as exc:  # noqa: BLE001  — corrupt hash → treat as missing
+            logger.warning("UserStoreRedis corrupt profile (%s); skipping", exc)
+            return None
+
+    # ------------------------------------------------------------------ #
+    def create_user(self, profile: UserProfile) -> str:
+        """Insert *profile* and return a new ``user_id`` (UUID4 hex)."""
+        user_id = uuid.uuid4().hex
+        if self._use_redis:
+            try:
+                self._client.hset(
+                    self._key(user_id),
+                    mapping={"profile": profile.model_dump_json(), "created": _now_str()},
+                )
+                logger.info("Created user %s (redis)", user_id[:8])
+                return user_id
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Redis create failed (%s); falling back to memory", exc)
+        self._mem[user_id] = profile
+        return user_id
+
+    def get_user(self, user_id: str) -> UserProfile | None:
+        """Fetch a profile by id, or ``None`` if not found."""
+        if not user_id:
+            return None
+        if self._use_redis:
+            try:
+                return self._row_to_profile(self._client.hgetall(self._key(user_id)))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Redis read failed (%s); falling back to memory", exc)
+        return self._mem.get(user_id)
+
+    def list_users(self) -> list[tuple[str, UserProfile]]:
+        """Return ``(user_id, profile)`` pairs for all users."""
+        if self._use_redis:
+            try:
+                result: list[tuple[str, UserProfile]] = []
+                cursor = 0
+                pattern = f"{self._namespace}:*"
+                while True:
+                    cursor, keys = self._client.scan(cursor=cursor, match=pattern, count=1000)
+                    for key in keys:
+                        profile = self._row_to_profile(self._client.hgetall(key))
+                        if profile is not None:
+                            uid = key.split(":", 1)[1]
+                            result.append((uid, profile))
+                    if cursor == 0:
+                        break
+                return result
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Redis list failed (%s); falling back to memory", exc)
+        return list(self._mem.items())
+
+    def delete_user(self, user_id: str) -> bool:
+        """Delete a user. Returns True if a row was removed."""
+        if not user_id:
+            return False
+        if self._use_redis:
+            try:
+                return self._client.delete(self._key(user_id)) > 0
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Redis delete failed (%s); falling back to memory", exc)
+        return self._mem.pop(user_id, None) is not None
+
+
+def _now_str() -> str:
+    # Redis hashes store strings; keep `created` as a compact epoch string.
+    import time
+
+    return str(time.time())
+
+
+def build_user_store(
+    backend: str | None = None,
+    *,
+    db_path: str | Path | None = None,
+    host: str = "localhost",
+    port: int = 6379,
+) -> UserStore | UserStoreRedis:
+    """Construct the right ``UserStore`` variant from ``settings.user_storage``."""
+    from nereus.config.settings import settings
+
+    resolved = backend or settings.user_storage
+    if resolved == "memory":
+        return UserStore()  # db_path=None -> in-process dict backing
+    if resolved == "redis":
+        return UserStoreRedis(host=host, port=port)
+    return UserStore(db_path=db_path or settings.user_db_path)
 
 
 def _now() -> float:

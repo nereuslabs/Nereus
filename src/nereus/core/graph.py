@@ -112,12 +112,23 @@ class NereusGraph:
 
     @property
     def user_store(self):
-        """Lazy ``UserStore`` (resolved from settings.user_storage)."""
+        """Lazy user store, resolved from ``settings.user_storage``.
+
+        Backends: ``"sqlite"`` (default), ``"redis"`` or ``"memory"``.
+        The redis backend degrades to an in-process dict when Redis is down.
+        """
         if self._user_store is None:
             from nereus.config.settings import settings
-            from nereus.core.user_store import UserStore
+            from nereus.core.user_store import UserStore, UserStoreRedis
 
-            self._user_store = UserStore(db_path=settings.user_db_path)
+            if settings.user_storage == "redis":
+                self._user_store = UserStoreRedis(
+                    host=settings.redis_host, port=settings.redis_port
+                )
+            elif settings.user_storage == "memory":
+                self._user_store = UserStore()
+            else:
+                self._user_store = UserStore(db_path=settings.user_db_path)
         return self._user_store
 
     # ------------------------------------------------------------------ #

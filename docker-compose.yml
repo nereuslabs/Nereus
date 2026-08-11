@@ -18,12 +18,18 @@ services:
       - OPENROUTER_EMBED_MODEL=${OPENROUTER_EMBED_MODEL:-openai/text-embedding-3-small}
       - CONTEXT_MAX_TOKENS=8000
       - NEREUS_RUN_LIVE=${NEREUS_RUN_LIVE:-0}
+      # Multi-user persistence (Issue #8/#57): set USER_STORAGE=redis to back
+      # UserProfile store on Redis instead of the local SQLite file.
+      - USER_STORAGE=${USER_STORAGE:-sqlite}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
     volumes:
       - ./src:/app/src
       - ./scripts:/app/scripts
       - ./materials:/app/materials
     depends_on:
       - chromadb
+      - redis
     networks:
       - nereus-net
 
@@ -46,6 +52,9 @@ services:
       - OPENROUTER_EMBED_MODEL=${OPENROUTER_EMBED_MODEL:-openai/text-embedding-3-small}
       - RETRIEVER_TOP_K=5
       - CONTEXT_MAX_TOKENS=8000
+      - USER_STORAGE=${USER_STORAGE:-sqlite}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
     volumes:
       - ./src:/app/src
       - ./scripts:/app/scripts
@@ -91,8 +100,20 @@ services:
     networks:
       - nereus-net
 
+  redis:
+    image: redis:7-alpine
+    container_name: nereus-redis
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - nereus-net
+
 volumes:
   chroma_data:
+  redis_data:
 
 networks:
   nereus-net:

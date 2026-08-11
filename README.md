@@ -207,14 +207,46 @@ python main.py --session-id <uuid> --user-id <uuid>
 изоляцию между пользователями даже при совпадении `session_id`.
 
 Профили пользователей (UserProfile) сохраняются через `UserStore` в SQLite
-(`.users/users.sqlite3` по умолчанию) либо в памяти при недоступности БД.
+(`.users/users.sqlite3` по умолчанию), в Redis (при `USER_STORAGE=redis`) либо
+в памяти при недоступности БД. Redis‑бекенд деградирует в память, если Redis
+недоступен — сервис не падает.
 
 ```env
-# .env
-USER_STORAGE=sqlite        # sqlite | memory
+# .env — persistence & multi-user (Issue #8/#57)
+USER_STORAGE=sqlite        # sqlite | redis | memory
 USER_DB_PATH=.users/users.sqlite3
-SESSION_ROOT=.sessions
+# redis (used when USER_STORAGE=redis)
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# session snapshots (Issue #57)
+SESSION_ROOT=.sessions      # {root}/{user_id}/{session_id}.json
 ```
+
+### Диагностика навыков (Issue #7)
+
+Перед генерацией roadmap бот может пройти пользователя кратким диагностическим
+квизом (3–5 вопросов), оценить ответы и построить **адаптивную** дорожную карту,
+ориентированную на слабые зоны.
+
+```bash
+# CLI: включить диагностический этап
+python main.py --new-session --user-id <uuid> --diagnostic
+
+# Harness
+LLM_PROVIDER=stub python -m nereus.scripts.eval_chain --dry-run --diagnostic --skill "Python"
+```
+
+```env
+# .env — diagnostic (Issue #7)
+RUN_DIAGNOSTIC=true          # запускать квиз до roadmap (default: false)
+DIAGNOSTIC_QUESTION_COUNT=5  # число вопросов (default: 5)
+```
+
+В офлайн‑тестах диагностика выключена принудительно (autouse‑фикстура
+`_force_stub_offline` в `tests/conftest.py`), чтобы `RUN_DIAGNOSTIC=true` из
+`.env` не ломал регрессионные тесты экзаменатора; специализированные тесты
+включают её через `build_nereus_graph(run_diagnostic=True)`.
 
 ### Локальный RAG (demo)
 

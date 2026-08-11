@@ -24,7 +24,7 @@ def test_parse_structured_plain_json() -> None:
 
 def test_parse_structured_accepts_fenced_and_prose() -> None:
     raw = (
-        'Here is the roadmap:\n```json\n'
+        "Here is the roadmap:\n```json\n"
         '{"topics": [{"id":"1","title":"A","description":"d"}]}\n```\nDone.'
     )
     out = parse_structured(raw, RoadmapOutput)

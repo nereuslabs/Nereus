@@ -35,9 +35,7 @@ def _profile() -> UserProfile:
 def test_sqlite_resume_persists_progress(tmp_path) -> None:
     """End-to-end: run -> persist -> resume in new instance -> state restored."""
     db = tmp_path / "live.sqlite3"
-    checkpointer = build_checkpointer(
-        CheckpointBackend.SQLITE, db_path=str(db)
-    )
+    checkpointer = build_checkpointer(CheckpointBackend.SQLITE, db_path=str(db))
 
     # first instance: run until the first examiner interrupt
     graph_a = build_nereus_graph(interactive=True, checkpointer=checkpointer)

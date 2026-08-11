@@ -155,9 +155,7 @@ class OpenRouterProvider(LLMProvider):
 
             if response.status_code >= 400:
                 last_raw = response.text
-                raise OpenRouterError(
-                    f"OpenRouter HTTP {response.status_code}: {last_raw[:300]}"
-                )
+                raise OpenRouterError(f"OpenRouter HTTP {response.status_code}: {last_raw[:300]}")
 
             data = response.json()
             self.last_model = data.get("model") or self._model

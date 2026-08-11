@@ -34,6 +34,8 @@ def build_nereus_graph(
     diagnostic=None,
     retriever: Retriever | None = None,
     session_path: str | None = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
     run_diagnostic: bool | None = None,
 ) -> NereusGraph:
     """Centralized factory for a :class:`NereusGraph`.
@@ -64,6 +66,8 @@ def build_nereus_graph(
         checkpointer=resolved_checkpointer,
         interactive=interactive,
         session_path=session_path,
+        session_id=session_id,
+        user_id=user_id,
         run_diagnostic=run_diagnostic,
     )
 

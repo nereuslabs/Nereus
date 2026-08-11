@@ -39,6 +39,24 @@ tests/
 - Offline safety: the autouse fixture in `tests/conftest.py` pins `run_diagnostic=False`
   so a developer `.env` cannot pull the diagnostic/interrupt path into hermetic tests.
 
+## Releases
+- `develop` is the integration branch; `main` is the release gate.
+- `main` is governed by a **repository ruleset** (`id=20506063`, source
+  `nereuslabs/Nereus`) — not legacy branch-protection — enforcing
+  `deletion`, `non_fast_forward`, and a `pull_request` rule (review count +
+  required status check `lint-and-test (3.11)`). The ruleset **cannot** be
+  managed by a token lacking the `manage_rulesets` scope (PATCH → HTTP 404),
+  and direct/non-fast-forward pushes to `main` are rejected even for admins
+  *unless* an admin‑bypass ruleset actor is configured.
+- To promote a release to `main`: open a PR `develop → main`, wait for
+  `lint-and-test (3.11)` = success, then merge **as admin** (`gh pr merge -R
+  nereuslabs/Nereus --* --admin`).
+- Annotate + push the tag (`git tag -s vX.Y.Z <main_tip> && git push origin vX.Y.Z`)
+  and publish a GitHub Release targeting `main`.
+- **v1.1.0 lesson:** a `--rebase --admin` merge rewrites SHAs, so the tag must
+  be (re)created on `main`'s tip and the Release `target_commitish` updated to
+  `main`; verify `git rev-list -n1 vX.Y.Z == main`.
+
 ## GitHub Flow
 - Feature branches from `develop`
 - PR targeting `develop`

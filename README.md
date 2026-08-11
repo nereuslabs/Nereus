@@ -5,7 +5,7 @@ AI‑tutor по принципу автоматизированного учеб
 выдаёт материалы и задания, проверяет ответы и адаптирует план под слабые зоны.
 Всё через диалог в терминале или в Web UI (Chainlit).
 
-[![CI](https://github.com/nereuslabs/Nereus/actions/workflows/ci.yml/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/nereuslabs/Nereus/actions/workflows/ci.yml?query=branch%3Adevelop)
+[![CI](https://github.com/nereuslabs/Nereus/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/nereuslabs/Nereus/actions/workflows/ci.yml?query=branch%3Adevelop)
 [![Release](https://img.shields.io/github/v/release/nereuslabs/Nereus?sort=semver&color=blue)](https://github.com/nereuslabs/Nereus/releases)
 [![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/nereuslabs/Nereus/blob/main/CONTRIBUTING.md)
 [![Roadmap](https://img.shields.io/badge/Roadmap-Project%20Board-6f42c1?style=flat-square&logo=github&logoColor=white)](https://github.com/orgs/nereuslabs/projects/1)

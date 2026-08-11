@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
 from pydantic import BaseModel, Field
 
-from nereus.core.state import Assessment, Roadmap, UserProfile
+from nereus.core.state import (
+    Assessment,
+    DiagnosticQuestion,
+    Roadmap,
+    UserProfile,
+    WeaknessReport,
+)
 
 
 class LearningSession(BaseModel):
@@ -156,3 +164,134 @@ class LearningSession(BaseModel):
     def load(cls, path: str | Path) -> "LearningSession":
         """Load a session previously written by :meth:`dump`."""
         return cls.model_validate_json(Path(path).read_text(encoding="utf-8"))
+
+
+@dataclass
+class UserSession:
+    """On-disk session for a specific user (P1 — multi-user profiles).
+
+    Unlike :class:`LearningSession` (an in-graph aggregated context), a
+    ``UserSession`` is the *filesystem* record that survives a process restart:
+    profile, roadmap, progress, and any diagnostic state.
+
+    Files live at ``{SESSION_ROOT}/{user_id}/{session_id}.json``.
+    """
+
+    session_id: str
+    user_id: str | None = None
+    user_profile: UserProfile | None = None
+    roadmap: Roadmap | None = None
+    current_topic_index: int = 0
+    retry_count: int = 0
+    user_submission: str | None = None
+    session_brief: str = ""
+    diagnostic_questions: list[DiagnosticQuestion] = field(default_factory=list)
+    user_diagnostic_answers: dict[str, str] | None = None
+    weakness_report: WeaknessReport | None = None
+
+    def __post_init__(self) -> None:
+        if not self.session_id:
+            self.session_id = uuid.uuid4().hex
+
+    def to_state_dict(self) -> dict[str, Any]:
+        """Convert to a dict suitable for seeding :class:`NereusState`."""
+        from nereus.core.state import Assessment, Verdict  # noqa: F401
+
+        state: dict[str, Any] = {
+            "user_profile": self.user_profile,
+            "roadmap": self.roadmap or Roadmap(),
+            "current_topic_index": self.current_topic_index,
+            "retry_count": self.retry_count,
+            "session_brief": self.session_brief,
+            "diagnostic_questions": self.diagnostic_questions,
+            "user_diagnostic_answers": self.user_diagnostic_answers,
+            "weakness_report": self.weakness_report,
+            "messages": [],
+        }
+        if self.user_submission:
+            state["user_submission"] = self.user_submission
+        return state
+
+    @classmethod
+    def from_state(cls, state: Mapping[str, Any], session_id: str | None = None) -> "UserSession":
+        """Capture the relevant NereusState fields into a UserSession."""
+        profile = state.get("user_profile")
+        roadmap = state.get("roadmap")
+        return cls(
+            session_id=session_id or uuid.uuid4().hex,
+            user_profile=profile if isinstance(profile, UserProfile) else None,
+            roadmap=roadmap if isinstance(roadmap, Roadmap) else None,
+            current_topic_index=int(state.get("current_topic_index", 0)),
+            retry_count=int(state.get("retry_count", 0)),
+            user_submission=state.get("user_submission"),
+            session_brief=state.get("session_brief", ""),
+            diagnostic_questions=list(state.get("diagnostic_questions") or []),
+            user_diagnostic_answers=state.get("user_diagnostic_answers"),
+            weakness_report=state.get("weakness_report")
+            if isinstance(state.get("weakness_report"), WeaknessReport)
+            else None,
+        )
+
+    def to_json(self) -> str:
+        from dataclasses import asdict
+
+        data = asdict(self)
+        # Pydantic models → dict
+        for k, v in list(data.items()):
+            if isinstance(v, BaseModel):
+                data[k] = v.model_dump()
+        import json
+
+        return json.dumps(data, default=str)
+
+    @classmethod
+    def from_json(cls, raw: str, *, session_id: str | None = None) -> "UserSession":
+        import json
+
+        data = json.loads(raw)
+        data["session_id"] = session_id or data.get("session_id") or uuid.uuid4().hex
+        # Restore pydantic models
+        if isinstance(data.get("user_profile"), dict):
+            data["user_profile"] = UserProfile(**data["user_profile"])
+        if isinstance(data.get("roadmap"), dict):
+            data["roadmap"] = Roadmap(**data["roadmap"])
+        if isinstance(data.get("weakness_report"), dict):
+            data["weakness_report"] = WeaknessReport(**data["weakness_report"])
+        if isinstance(data.get("diagnostic_questions"), list):
+            data["diagnostic_questions"] = [
+                DiagnosticQuestion(**q) if isinstance(q, dict) else q
+                for q in data["diagnostic_questions"]
+            ]
+        return cls(**data)
+
+    # ------------------------------------------------------------------ #
+    def dump(self, path: str | Path) -> None:
+        """Persist this session to *path* as JSON."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(self.to_json(), encoding="utf-8")
+
+    @classmethod
+    def load(cls, path: str | Path) -> "UserSession | None":
+        """Load a session from *path*, or ``None`` if the file doesn't exist.
+
+        The ``session_id`` is preserved from the stored JSON, not derived from
+        the filename stem.
+        """
+        p = Path(path)
+        if not p.exists():
+            return None
+        return cls.from_json(p.read_text(encoding="utf-8"))
+
+
+def session_path_for(user_id: str | None, session_id: str) -> Path:
+    """Resolve the on-disk path for a session: ``SESSION_ROOT/user_id/session_id.json``.
+
+    Falls back to ``SESSION_ROOT/session_id.json`` when no user_id is set.
+    """
+    from nereus.config.settings import settings
+
+    root = Path(settings.session_root)
+    if user_id:
+        return root / user_id / f"{session_id}.json"
+    return root / f"{session_id}.json"

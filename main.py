@@ -109,6 +109,23 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Skip diagnostic quiz (overrides --diagnostic and env config)",
     )
+    parser.add_argument(
+        "--session-id",
+        metavar="ID",
+        help="Resume a specific user session by ID (P1 multi-user). "
+        "Sessions are stored under SESSION_ROOT/{user_id}/{session_id}.json",
+    )
+    parser.add_argument(
+        "--user-id",
+        metavar="ID",
+        help="User ID to associate this session with (P1 multi-user). "
+        "Required for session persistence with --session-id.",
+    )
+    parser.add_argument(
+        "--new-session",
+        action="store_true",
+        help="Start a fresh session: generate a new session_id (P1 multi-user)",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -140,22 +157,44 @@ def main(argv: list[str] | None = None) -> int:
     if args.no_diagnostic:
         run_diag = False
 
+    # --- P1: multi-user session handling ---
+    session_id = args.session_id
+    user_id = args.user_id
+    if args.new_session:
+        import uuid
+
+        session_id = uuid.uuid4().hex
+        thread_id = session_id
+        logger.info("new session created | session_id=%s", session_id)
+    elif session_id:
+        if not user_id:
+            logger.warning("--user-id recommended with --session-id for proper isolation")
+        thread_id = session_id
+    elif args.resume:
+        thread_id = args.resume
+    else:
+        thread_id = "nereus-demo"
+
     graph = build_nereus_graph(
         interactive=True,
         checkpointer=checkpointer,
         session_path=session_path,
+        session_id=session_id,
+        user_id=user_id,
         run_diagnostic=run_diag,
     )
     logger.info(
-        "starting run | thread_id=%s session=%s backend=%s diagnostic=%s",
+        "starting run | thread_id=%s session=%s backend=%s diagnostic=%s user_id=%s session_id=%s",
         thread_id,
         session_path,
         backend,
         run_diag,
+        user_id,
+        session_id,
     )
 
     if args.resume:
-        config = {"configurable": {"thread_id": args.resume}}
+        config = {"configurable": {"thread_id": args.resume, "session_id": args.resume}}
         logger.info("resuming session | thread_id=%s backend=%s", args.resume, backend)
         # Fetch the persisted state (incl. any pending interrupt) directly
         # from the checkpointer instead of re-invoking with an empty dict
@@ -171,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
             profile.target_level,
             run_diag,
         )
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {"configurable": {"thread_id": thread_id, "session_id": session_id or thread_id}}
 
         initial_state: dict = {
             "user_profile": profile,

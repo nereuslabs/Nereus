@@ -184,6 +184,38 @@ LLM_PROVIDER=openrouter OPENROUTER_API_KEY=<key> \
   chainlit run src/nereus/ui/app.py
 ```
 
+### Multi-user sessions (Issue #8/#57)
+
+Nereus поддерживает несколько независимых пользовательских сессий в одном
+deployment. Каждая сессия сохраняет профиль, roadmap, прогресс и диагностическое
+состояние на диск и может быть восстановлена между перезапусками.
+
+```bash
+# Создать новую сессию (генерируется session_id)
+python main.py --new-session --user-id <uuid>
+
+# Возобновить существующую сессию по session_id
+python main.py --session-id <uuid> --user-id <uuid>
+```
+
+- **`--new-session`** — генерирует новый `session_id` (UUID4) и запускает чат с чистого листа.
+- **`--session-id <id>`** — загружает ранее сохранённую сессию из `SESSION_ROOT/{user_id}/{session_id}.json`.
+- **`--user-id <id>`** — идентификатор пользователя для sharding файлов сессий.
+- **`--resume <thread_id>`** — восстанавливает LangGraph checkpoints (SQLite checkpointer).
+
+Файлы сессий хранятся в `SESSION_ROOT` (по умолчанию `.sessions/`), что обеспечивает
+изоляцию между пользователями даже при совпадении `session_id`.
+
+Профили пользователей (UserProfile) сохраняются через `UserStore` в SQLite
+(`.users/users.sqlite3` по умолчанию) либо в памяти при недоступности БД.
+
+```env
+# .env
+USER_STORAGE=sqlite        # sqlite | memory
+USER_DB_PATH=.users/users.sqlite3
+SESSION_ROOT=.sessions
+```
+
 ### Локальный RAG (demo)
 
 RAG‑хранилище (ChromaDB) наполняется из `materials/` скриптом

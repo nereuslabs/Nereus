@@ -26,6 +26,7 @@ _ALLOWED_MSGPCK: list[tuple[str, str]] = [
     ("nereus.core.state", "DiagnosticQuestion"),
     ("nereus.core.state", "WeaknessReport"),
     ("nereus.core.session", "LearningSession"),
+    ("nereus.core.session", "UserSession"),
 ]
 
 

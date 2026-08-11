@@ -87,6 +87,8 @@ class NereusGraph:
         checkpointer=None,
         interactive: bool = False,
         session_path: Path | str | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
         run_diagnostic: bool = False,
     ) -> None:
         inference = inference or (StructuredInferenceClient(provider) if provider else None)
@@ -102,8 +104,21 @@ class NereusGraph:
         )
         self._interactive = interactive
         self._session_path = Path(session_path) if session_path else None
+        self._session_id = session_id
+        self._user_id = user_id
         self._run_diagnostic = run_diagnostic
+        self._user_store = None
         self._graph = self._build(checkpointer)
+
+    @property
+    def user_store(self):
+        """Lazy ``UserStore`` (resolved from settings.user_storage)."""
+        if self._user_store is None:
+            from nereus.config.settings import settings
+            from nereus.core.user_store import UserStore
+
+            self._user_store = UserStore(db_path=settings.user_db_path)
+        return self._user_store
 
     # ------------------------------------------------------------------ #
     # Session persistence (runtime wiring for #6/#22)                    #
@@ -139,7 +154,27 @@ class NereusGraph:
             state["current_topic_index"] = session.current_topic_index
 
     def _dump_session(self, state: Mapping[str, object]) -> None:
-        """Persist the live session after a boundary node (examiner/complete)."""
+        """Persist the live session after a boundary node (examiner/complete).
+
+        Two backends:
+        - ``session_path`` (legacy #22 wiring): saves the in-graph ``LearningSession``
+          as JSON via ``session.dump``.
+        - ``session_id`` (P1 multi-user): saves a :class:`UserSession` snapshot to
+          ``SESSION_ROOT/{user_id}/{session_id}.json`` so progress survives
+          restarts and isolates per-user.
+        """
+        from nereus.core.session import UserSession, session_path_for
+
+        if self._session_id is not None:
+            try:
+                us = UserSession.from_state(state, session_id=self._session_id)
+                us.user_id = self._user_id
+                path = session_path_for(self._user_id, self._session_id)
+                us.dump(path)
+                logger.debug("UserSession dumped -> %s", path)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("could not persist UserSession: %s", exc)
+
         if self._session_path is None:
             return
         session = state.get("session")
@@ -338,9 +373,38 @@ class NereusGraph:
         trimmed = summarize_history(messages, self._inference, settings.context_max_tokens)
         return {"messages": trimmed}
 
+    def _load_user_session(self, config: dict | None) -> dict:
+        """Load a persisted :class:`UserSession` if ``session_id`` is in config.
+
+        Overrides defaults from ``_DEFAULT_STATE`` so the graph resumes a prior
+        user's roadmap / progress instead of restarting coaching.
+        """
+        from nereus.core.session import UserSession, session_path_for
+
+        if self._session_id is None:
+            return {}
+        # Allow per-call override via config (e.g. resume a different thread).
+        cfg_session_id = None
+        if config:
+            cfg = config.get("configurable", {}) or {}
+            cfg_session_id = cfg.get("session_id")
+        target = cfg_session_id or self._session_id
+        path = session_path_for(self._user_id, target)
+        if not path.exists():
+            logger.debug("no UserSession on disk at %s", path)
+            return {}
+        try:
+            us = UserSession.load(path)
+            logger.info("resumed UserSession %s -> %s", target, path)
+            return us.to_state_dict()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("failed to load UserSession %s: %s", target, exc)
+            return {}
+
     def invoke(self, state: object, config: dict | None = None) -> dict:
         if isinstance(state, dict):
-            state = {**_DEFAULT_STATE, **state}
+            user_state = self._load_user_session(config)
+            state = {**_DEFAULT_STATE, **user_state, **state}
             loaded = self._session_for(config)
             if loaded is not None and state.get("session") is None:
                 state["session"] = loaded
@@ -358,7 +422,8 @@ class NereusGraph:
 
     async def astream(self, state: object, config: dict | None = None, stream_mode: str = "values"):
         if isinstance(state, dict):
-            state = {**_DEFAULT_STATE, **state}
+            user_state = self._load_user_session(config)
+            state = {**_DEFAULT_STATE, **user_state, **state}
             loaded = self._session_for(config)
             if loaded is not None and state.get("session") is None:
                 state["session"] = loaded

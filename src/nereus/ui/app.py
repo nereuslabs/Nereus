@@ -103,9 +103,7 @@ async def _ask_float(prompt: str, default: float, minimum: float | None = None) 
             ).send()
             continue
         if minimum is not None and value < minimum:
-            await cl.Message(
-                content=f"⚠️  Значение должно быть не меньше {minimum}."
-            ).send()
+            await cl.Message(content=f"⚠️  Значение должно быть не меньше {minimum}.").send()
             continue
         return value
     return default
@@ -124,9 +122,7 @@ async def _ask_int(prompt: str, default: int, minimum: int | None = None) -> int
             ).send()
             continue
         if minimum is not None and value < minimum:
-            await cl.Message(
-                content=f"⚠️  Значение должно быть не меньше {minimum}."
-            ).send()
+            await cl.Message(content=f"⚠️  Значение должно быть не меньше {minimum}.").send()
             continue
         return value
     return default
@@ -149,12 +145,8 @@ async def collect_profile() -> UserProfile:
         "Целевой уровень (beginner/intermediate/advanced) [intermediate]:",
         UserLevel.INTERMEDIATE,
     )
-    hours = await _ask_float(
-        "Часов в день выделяете на обучение [1]:", 1.0, minimum=0.0
-    )
-    deadline = await _ask_int(
-        "За сколько дней хотите завершить [30]:", 30, minimum=1
-    )
+    hours = await _ask_float("Часов в день выделяете на обучение [1]:", 1.0, minimum=0.0)
+    deadline = await _ask_int("За сколько дней хотите завершить [30]:", 30, minimum=1)
     goal = await _ask(f"Цель обучения [{skill}]:", f"Oсвоить {skill}")
 
     return UserProfile(
@@ -275,8 +267,8 @@ class UIApp:
         dicts and objects), which also avoids the `.get` AttributeError on
         Pydantic models.
         """
-        book = chr(0x1f4da)  # material icon (📚 BOOKS)
-        memo = chr(0x1f4dd)  # examiner icon
+        book = chr(0x1F4DA)  # material icon (📚 BOOKS)
+        memo = chr(0x1F4DD)  # examiner icon
         nl = chr(10)
         parts: list[str] = []
         material = self._last.get("material", "")
@@ -316,9 +308,7 @@ async def _run_app_session(app: UIApp, profile: UserProfile) -> None:
         f"(уровни: {profile.current_level.value} → {profile.target_level.value})…"
     ).send()
     try:
-        interrupt = await app.astream(
-            {"user_profile": profile, "max_retries": DEFAULT_MAX_RETRIES}
-        )
+        interrupt = await app.astream({"user_profile": profile, "max_retries": DEFAULT_MAX_RETRIES})
         await _run_exam_loop(app, interrupt)
     except LLMUnavailableError as exc:
         logger.warning("LLM unavailable during session: %s", exc)
@@ -346,9 +336,7 @@ async def _run_exam_loop(app: UIApp, interrupt: dict | None) -> None:
         answer = await cl.AskUserMessage(content=prompt, timeout=900).send()
         submission = _answer_text(answer).strip()
         if not submission:
-            await cl.Message(
-                content="⚠️  Вы не ввели ответ. Попробуйте ответить на задачу."
-            ).send()
+            await cl.Message(content="⚠️  Вы не ввели ответ. Попробуйте ответить на задачу.").send()
             continue
         interrupt = await app.astream(Command(resume=submission))
 

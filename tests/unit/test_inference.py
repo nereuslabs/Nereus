@@ -36,9 +36,7 @@ def test_inference_retries_on_bad_json_then_succeeds() -> None:
             return "not json <<<"
         return json.dumps({"score": 90, "feedback": "ok", "weak_areas": []})
 
-    client = StructuredInferenceClient(
-        StubLLMProvider(responder=responder), max_retries=2
-    )
+    client = StructuredInferenceClient(StubLLMProvider(responder=responder), max_retries=2)
     out = client.generate([], role=AgentRole.EXAMINER, output_model=AssessmentOutput)
     assert out.score == 90.0
     assert len(client.calls) == 3  # 1 initial + 2 retries
@@ -57,9 +55,7 @@ def test_inference_retries_on_provider_error_then_raises_unavailable() -> None:
     def responder(messages, **_):
         raise OpenRouterError("boom")
 
-    client = StructuredInferenceClient(
-        StubLLMProvider(responder=responder), max_retries=2
-    )
+    client = StructuredInferenceClient(StubLLMProvider(responder=responder), max_retries=2)
     with pytest.raises(LLMUnavailableError):
         client.generate([], role=AgentRole.COACH, output_model=RoadmapOutput)
     assert len(client.calls) == 3  # attempt 1 + 2 retries, all provider errors

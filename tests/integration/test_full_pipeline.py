@@ -76,9 +76,7 @@ def test_full_pipeline_with_llm_provider(base_state, fake_llm_provider) -> None:
         return json.dumps({"score": 95, "feedback": "ok", "weak_areas": []})
 
     graph = NereusGraph(provider=fake_llm_provider(responder=responder))
-    final = graph.invoke(
-        {**_input(base_state["user_profile"]), "user_submission": "answer"}
-    )
+    final = graph.invoke({**_input(base_state["user_profile"]), "user_submission": "answer"})
 
     assert len(final["roadmap"].topics) == 2
     assert final["status"] == "completed"

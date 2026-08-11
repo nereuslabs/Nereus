@@ -60,9 +60,7 @@ def test_chroma_retriever_with_fake_store() -> None:
 
         def search(self, query_embedding, *, top_k=5, where=None):
             self.queries.append((list(query_embedding), top_k, where))
-            return [
-                {"id": "x", "content": "chunk from chroma", "score": 0.9, "metadata": {}}
-            ]
+            return [{"id": "x", "content": "chunk from chroma", "score": 0.9, "metadata": {}}]
 
     store = FakeStore()
     retriever = ChromaRetriever(store=store, embedder=StubEmbedder(dim=16))

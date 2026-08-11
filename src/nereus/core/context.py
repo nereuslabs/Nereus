@@ -24,9 +24,7 @@ def approx_token_count(messages: Sequence[Mapping[str, object] | object]) -> int
     total = 0
     for msg in messages:
         d = _as_dict(msg)
-        total += max(
-            _APPROX_TOKENS_PER_MSG, len(d["content"]) // _APPROX_CHARS_PER_TOKEN
-        )
+        total += max(_APPROX_TOKENS_PER_MSG, len(d["content"]) // _APPROX_CHARS_PER_TOKEN)
     return total
 
 

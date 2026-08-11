@@ -148,7 +148,8 @@ def main(argv: list[str] | None = None) -> int:
         thread_id = "nereus-demo"
     else:
         thread_id = "nereus-demo"
-    Path(session_path).parent.mkdir(parents=True, exist_ok=True)
+    if session_path is not None:
+        Path(session_path).parent.mkdir(parents=True, exist_ok=True)
 
     # Determine whether to run diagnostic quiz (Issue #7)
     run_diag = settings.run_diagnostic

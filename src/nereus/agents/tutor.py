@@ -93,9 +93,7 @@ class TutorAgent(BaseAgent):
         session = state.get("session")
 
         if is_offline_inference(self._inference):
-            material = (
-                self._revision_material(state) if retrying else self._topic_material(topic)
-            )
+            material = self._revision_material(state) if retrying else self._topic_material(topic)
             task = self._task_for(topic)
         else:
             # Real provider: retries happen inside generate(); a persistent

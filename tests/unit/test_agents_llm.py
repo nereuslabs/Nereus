@@ -36,9 +36,7 @@ def test_coach_uses_offline_roadmap_when_stub_provider(user_profile) -> None:
     assert len(roadmap.topics) == 3
 
 
-def test_coach_raises_unavailable_on_provider_failure(
-    user_profile, fake_llm_provider
-) -> None:
+def test_coach_raises_unavailable_on_provider_failure(user_profile, fake_llm_provider) -> None:
     def responder(messages, **_):
         raise OpenRouterError("bad key")
 
@@ -79,9 +77,7 @@ def test_tutor_raises_unavailable_on_provider_failure(
         tutor.run(base_state)
 
 
-def test_tutor_does_not_swallow_provider_errors(
-    roadmap, base_state, fake_llm_provider
-) -> None:
+def test_tutor_does_not_swallow_provider_errors(roadmap, base_state, fake_llm_provider) -> None:
     def responder(messages, **_):
         raise RuntimeError("provider failed")
 
@@ -103,9 +99,7 @@ def test_examiner_llm_evaluator(roadmap, base_state, fake_llm_provider) -> None:
     assert result["assessment"].score == 88.0
 
 
-def test_examiner_llm_evaluator_retry_on_low_score(
-    roadmap, base_state, fake_llm_provider
-) -> None:
+def test_examiner_llm_evaluator_retry_on_low_score(roadmap, base_state, fake_llm_provider) -> None:
     def responder(messages, **_):
         return json.dumps({"score": 40, "feedback": "weak", "weak_areas": ["x"]})
 

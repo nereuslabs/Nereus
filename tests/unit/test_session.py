@@ -70,9 +70,7 @@ def test_record_assessment_tracks_retries_and_weak_areas() -> None:
 
 
 def test_to_brief_contains_profile_progress_and_weak_areas() -> None:
-    session = LearningSession(
-        user_profile=_profile(), roadmap=_roadmap(), current_topic_index=1
-    )
+    session = LearningSession(user_profile=_profile(), roadmap=_roadmap(), current_topic_index=1)
     session.record_assessment(
         Assessment(
             topic_id="1",

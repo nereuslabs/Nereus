@@ -37,9 +37,7 @@ class StubRetriever:
         stored.extend(chunks)
         return list(chunks)
 
-    def retrieve(
-        self, *, query: str, topic: RoadmapTopic, top_k: int = 5
-    ) -> list[RetrievedChunk]:
+    def retrieve(self, *, query: str, topic: RoadmapTopic, top_k: int = 5) -> list[RetrievedChunk]:
         stored = self._store.get(topic.id, [])
         if stored:
             query_vec = self._embedder.embed(query)
@@ -57,12 +55,7 @@ class StubRetriever:
                     f"{topic.description}. Core concepts summarized."
                 )
             ]
-        return [
-            RetrievedChunk(
-                topic_id=topic.id, content=content, score=1.0
-            )
-            for content in chosen
-        ]
+        return [RetrievedChunk(topic_id=topic.id, content=content, score=1.0) for content in chosen]
 
 
 class ChromaRetriever:
@@ -77,17 +70,11 @@ class ChromaRetriever:
         embeddings = self._embedder.embed_many(list(chunks))
         metadatas = [{"topic_id": topic.id, "topic_title": topic.title} for _ in chunks]
         ids = [f"{topic.id}-{i}" for i in range(len(chunks))]
-        return self._store.add_documents(
-            list(chunks), embeddings, ids=ids, metadatas=metadatas
-        )
+        return self._store.add_documents(list(chunks), embeddings, ids=ids, metadatas=metadatas)
 
-    def retrieve(
-        self, *, query: str, topic: RoadmapTopic, top_k: int = 5
-    ) -> list[RetrievedChunk]:
+    def retrieve(self, *, query: str, topic: RoadmapTopic, top_k: int = 5) -> list[RetrievedChunk]:
         query_vec = self._embedder.embed(query)
-        hits = self._store.search(
-            query_vec, top_k=top_k, where={"topic_id": topic.id}
-        )
+        hits = self._store.search(query_vec, top_k=top_k, where={"topic_id": topic.id})
         if not hits:
             return []
         return [

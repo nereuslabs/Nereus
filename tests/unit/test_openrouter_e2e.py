@@ -54,6 +54,7 @@ def test_openrouter_provider_drives_full_pipeline(base_state) -> None:
     PASS assessment. This exercises the production code path that free-router
     prose-vs-JSON ambiguity could break.
     """
+
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=_superset_reply())
 

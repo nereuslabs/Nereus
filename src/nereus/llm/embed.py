@@ -95,9 +95,7 @@ class OpenRouterEmbedder:
         client: httpx.Client | None = None,
     ) -> None:
         if not api_key:
-            raise ValueError(
-                "OpenRouterEmbedder requires an api_key (OPENROUTER_API_KEY)"
-            )
+            raise ValueError("OpenRouterEmbedder requires an api_key (OPENROUTER_API_KEY)")
         self._base_url = base_url.rstrip("/")
         self.model = model or settings.openrouter_embed_model
         self._timeout = timeout

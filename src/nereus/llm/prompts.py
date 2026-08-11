@@ -142,7 +142,7 @@ def build_examiner_prompt(
     user = f"Topic: {topic_title}\nTask: {task}"
     if retrieved:
         context_block = "\n".join(
-            f"- {_content(chunk)} (relevance {score}\n  )"
+            f"- {_content(chunk)} (relevance {score})"
             for chunk in retrieved
             for score in [_attr(chunk, "score", 0.0)]
         )

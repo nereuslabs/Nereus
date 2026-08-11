@@ -283,18 +283,22 @@ class NereusGraph:
             interrupt_payload = {"questions": [q.model_dump() for q in questions]}
             # Use LangGraph interrupt to pause and collect answers on resume
             received = interrupt(interrupt_payload)
-            # On resume, received contains the user's answers
+            # On resume, received contains the user's answers. Be defensive:
+            # only a dict is a directly-usable answer map; a JSON string is
+            # parsed; anything else degrades gracefully to {} so an opaque /
+            # malformed resume never crashes the run (previously
+            # ``dict(received)`` raised ValueError on a non-JSON string).
             if isinstance(received, dict):
                 answers = received
             elif isinstance(received, str):
-                try:
-                    import json
+                import json
 
+                try:
                     answers = json.loads(received)
-                except (json.JSONDecodeError, ValueError):
-                    answers = dict(received)  # noqa: E731
+                except (json.JSONDecodeError, ValueError, TypeError):
+                    answers = {}
             else:
-                answers = dict(received) if received else {}
+                answers = received if isinstance(received, dict) else {}
             result["user_diagnostic_answers"] = answers
 
         # Either non-interactive (default), or interactive with answers received

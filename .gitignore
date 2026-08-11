@@ -43,6 +43,9 @@ htmlcov/
 # Poolside harness (local; not part of the Nereus repository)
 .poolside/
 
+# AI coding-agent scratch (Claude/Poolside session files; never commit)
+.claude/
+
 # Docker / ChromaDB data
 .chroma/
 chroma_db/

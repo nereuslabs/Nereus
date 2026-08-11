@@ -1,335 +1,231 @@
 # Nereus
 
-AI-тьютор, работающий по принципу автоматизированного учебного процесса — от Roadmap до **уверенных практических навыков**!
+AI‑tutor по принципу автоматизированного учебного процесса — от **Roadmap** до
+**уверенных практических навыков**: собирает профиль, строит дорожную карту,
+выдаёт материалы и задания, проверяет ответы и адаптирует план под слабые зоны.
+Всё через диалог в терминале или в Web UI (Chainlit).
 
-[![Дорожная карта](https://img.shields.io/badge/Roadmap-Project%20Board-6f42c1?style=flat-square&logo=github&logoColor=white)](https://github.com/orgs/nereuslabs/projects/1)
+[![CI](https://github.com/nereuslabs/Nereus/actions/workflows/ci.yml/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/nereuslabs/Nereus/actions/workflows/ci.yml?query=branch%3Adevelop)
+[![Release](https://img.shields.io/github/v/release/nereuslabs/Nereus?sort=semver&color=blue)](https://github.com/nereuslabs/Nereus/releases)
+[![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/nereuslabs/Nereus/blob/main/CONTRIBUTING.md)
+[![Roadmap](https://img.shields.io/badge/Roadmap-Project%20Board-6f42c1?style=flat-square&logo=github&logoColor=white)](https://github.com/orgs/nereuslabs/projects/1)
+[![License](https://img.shields.io/github/license/nereuslabs/Nereus)](LICENSE)
 
-## Архитектура
+---
 
-Nereus построен как зацикленный автомат из трёх агентов, оркеструемых через **LangGraph** (human-in-the-loop):
+## Возможности
 
-1. **Агент-коуч** — собирает профиль пользователя (скилл, уровень, сроки) и строит **Roadmap**.
-2. **Агент-тьютор** — выдаёт учебные материалы и задания по текущей теме Roadmap, углубляет слабые места.
-3. **Агент-экзаменатор** — проверяет ответы, ставит оценку и вердикт `PASS` / `RETRY`, после чего автомат решает: двигаться дальше или повторить материал.
+- **Агентный автомат на LangGraph** — Coach → Tutor → Examiner с условным роутингом
+  (`PASS`/`RETRY`/`END`) и human‑in‑the‑loop через `interrupt`.
+- **Адаптивная диагностика** (Issue #7) — короткий квиз перед roadmap‑ом,
+  `WeaknessReport` → дорожная карта, упорядоченная по слабым зонам.
+- **Мульти‑пользовательские сессии** (Issue #8/#57) — профили + snapshot‑ы
+  сессий на диск (`SESSION_ROOT`), хранение профилилей в SQLite / Redis / memory.
+- **RAG** — ChromaDB‑хранилище материалов, retrieval‑augmented экзаменатор.
+- **LLM‑абстракция** — `stub` (офлайн, CI‑безопасно) и `openrouter` (chat + embeddings).
+- **Web UI** на Chainlit + **CLI** (`main.py`) с `--resume`/`--session-id`.
+- **CI**: `ruff check` + `ruff format --check` + `pytest` (174 passed, 2 skipped).
+- **Docker Compose** — `app`, `ui`, `chromadb`, `redis`.
 
-## Статус
-
-**Стадия:** активная разработка MVP. Репо живёт в организации `nereuslabs/Nereus`.
-
-Схема шагов (см. Milestones):
-- Шаг 1 ✅ — базовый автомат‑агент (LangGraph, LLM runtime, реестр промптов, память сессии). Слит в `develop`.
-- Шаг 2 ✅ — абстракция LLM‑провайдера (`Ollama` + `stub`). Слит в `develop`.
-- Шаг 3 ✅ — inference‑клиент с ретраями, схемы/промпты, окно контекста, CLI‑харнес (`scripts/eval_chain.py`). Слит в `develop`.
-- Шаг 4 ✅ — RAG‑конвейер: эмбеддинги (`llm/embed.py`), ChromaDB‑хранилище (`db/chroma.py`) + `llm/retriever.py`, retrieval, проинтегрированный в узлы `tutor_*` графа. Слит в `develop`.
-- Шаг 5 ✅ — Chainlit Web‑UI (`src/nereus/ui/app.py`) + runtime‑провязка сессии (#23). Слит в `develop`.
-- Шаг 6 ✅ — Персистентная сессия: `LearningSession.dump/load` в runtime‑цикле (`core/graph.py`) + `core/persistence.py` (sqlite/redis/memory checkpointer). #6, #16, #22.
-
-Ветвление — GitHub Flow с integration‑веткой `develop`: feature‑ветки → Pull Request (base `develop`) → merge. Текущая работа — в зависимости от задачи (см. Issues/Milestones).
-
-Реализовано на текущем этапе:
-- полный циклический граф LangGraph с условным роутингом (`PASS`/`RETRY`/`END`);
-- human-in-the-loop через `interrupt` (интерактивный режим);
-- **абстракция LLM‑провайдера** (`LLMProvider`: `OpenRouterProvider` + `StubLLMProvider`) с фабрикой `build_nereus_graph()`; агенты генерируют roadmap/материалы/оценки через модель, офлайн‑stub — детерминированно без сети; при недоступности LLM сервис сообщает «Сервис временно недоступен» (#44/#45);
-- **сло́й промптов и схем**: реестр ролей/промптов (`llm/prompts.py`), Pydantic‑контракты ответов (`llm/schema.py`), параметры модели (`llm/params.py`), inference‑клиент с ретраями (`llm/inference.py`);
-- **RAG‑сло́й**: протоколы `Embedder` и `Retriever` (`llm/embed.py`, `llm/retriever.py`), `ChromaStore` (`db/chroma.py`), retrieval, проинтегрированный в узлы `tutor_*` (`core/graph.py`);
-- **память сессии** (`core/session.py` `LearningSession`) с агрегацией слабых мест, `session_brief`‑преамбулой, `dump`/`load`, `messages` и `trim_context`;
-- **чекпоинтер** (`core/persistence.py:build_checkpointer` — sqlite/redis/memory) для cross‑restart resume в CLI и Chainlit;
-- авто- и опциональные live‑тесты; CI (ruff + pytest); Docker + Docker Compose.
-
-## Стек
-
-- **Python 3.11+**, **LangGraph** — оркестрация агентной цепочки
-- **OpenRouter** (`https://openrouter.ai/api/v1`, chat + embeddings) + **ChromaDB** —
-  агрегатор LLM/embeddings (локальная модель через `openrouter/free`/cloud); ChromaDB —
-  векторное хранилище и RAG (интегрировано в Шаг 4);
-- **Chainlit** — Web UI (`src/nereus/ui/app.py`, Шаг 5 ✅);
-- **Docker + Docker Compose** — развёртывание
-
-## Конфигурация LLM
-
-По умолчанию используется `LLM_PROVIDER=stub` (без сети). Для реальной модели в `.env`:
-
-```bash
-# OpenRouter (рекомендуется): агрегатор со свободными и платными моделями.
-LLM_PROVIDER=openrouter
-OPENROUTER_API_KEY=<your-key-from-openrouter.ai>
-OPENROUTER_MODEL=openrouter/free   # или конкретная платная модель, e.g. "anthropic/claude-3.5-sonnet"
-```
-
-> **Примечание про `openrouter/free`.** Свободные модели выбираются роутером в момент
-> запроса; реальная модель возвращается в `response.model` и кэшируется в `last_model`.
-> Лимиты бесплатных моделей: ~20 RPM / ~50 запросов в сутни без кредитов
-> (или ~1000 RPD при наличии кредитов). При 401/402/403 API‑сообщает об ошибке, и
-> агенты сообщают «Сервис временно недоступен», не падая (#44/#45).
-
-> **Без ключа?** Если `LLM_PROVIDER=openrouter`, но `OPENROUTER_API_KEY` пустой
-> (например, в Docker без env‑переменной), сервис стартует в офлайн‑режиме `stub`
-> с предупреждением в логах — UI и CLI не падают. Чтобы включить OpenRouter, задайте
-> ключ: `OPENROUTER_API_KEY=<key> docker compose up -d --build ui`.
-
-Дополнительные параметры (опционально, fallback на defaults в `llm/params.py`):
-```bash
-CONTEXT_MAX_TOKENS=8000     # бюджет окна истории сообщений
-```
-
-Параметры RAG (по умолчанию `EMBEDDING_PROVIDER=stub` — без сети, используются fake‑векторы для офлайн‑демо):
-```bash
-EMBEDDING_PROVIDER=stub                       # "stub" | "sentence_transformers" | "openrouter"
-SENTENCE_TRANSFORMERS_MODEL=sentence-transformers/all-MiniLM-L6-v2
-OPENROUTER_EMBED_MODEL=openai/text-embedding-3-small  # только для EMBEDDING_PROVIDER=openrouter
-RETRIEVER_TOP_K=5
-CHROMADB_HOST=localhost
-CHROMADB_PORT=8000
-```
-
-### Параметры persistence (чекпоинтер)
-
-Граф использует LangGraph checkpointer для сохранения состояния `state` между
-паузами (`interrupt`) и перезапусками. По умолчанию — in-memory `MemorySaver`,
-чтобы CI оставалась офлайн‑детерминированной; задайте `CHECKPOINTER=sqlite`
-(или `redis`) для cross‑restart resume:
-
-```bash
-CHECKPOINTER=sqlite
-CHECKPOINT_DB=.checkpoints/nereus.sqlite3   # путь к файлу БД
-# или
-CHECKPOINTER=redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-```
-
-CLI поддерживает `--resume <thread_id>` для продолжения прерванной сессии
-(восстанавливает состояние из checkpointer + `LearningSession` JSON) и
-`--session-path <PATH>` для указания пути к файлу сессии (по умолчанию
-`.sessions/{thread_id}.json`):
-
-```bash
-python main.py --resume nereus-demo
-python main.py --session-path /tmp/my-session.json
-```
-
-> Сессия и `thread_id` в Web UI сохраняются в пределах браузерной сессии
-> (Chainlit `cl.user_session`); cross‑restart resume требует persistent
-> checkpointer (`CHECKPOINTER=sqlite` по умолчанию). Полное восстановление
-> после `hard refresh` (без `thread_id`) — в беклоге (#23 follow-up).
-
-Для образования см. issue #16 (persistent checkpointer).
-
-После чего `python main.py` будет генерировать Roadmap, материалы и оценки через модель.
-
-### Оценка цепочки (harness)
-
-CLI‑харнес `scripts/eval_chain.py` прогоняет full‑pipeline end‑to‑end и пишет JSONL‑трассу (roadmap, final assessment, `session_brief`, журнал LLM‑вызовов с latency/retrofit):
-
-```bash
-# stub (offline) dry-run на экран
-LLM_PROVIDER=stub python -m nereus.scripts.eval_chain --dry-run --skill "Python"
-
-# OpenRouter (рекомендуется) — trace в artifacts/run.jsonl
-LLM_PROVIDER=openrouter OPENROUTER_API_KEY=<key> OPENROUTER_MODEL=openrouter/free \
-  python -m nereus.scripts.eval_chain --skill "Python" --submission "this is good"
-```
-
-### Живые тесты против реального LLM
-
-Тест `tests/integration/test_live_openrouter.py` выполняется
-**только** при включённом флаге, чтобы CI оставалась офлайн‑детерминированной:
-
-```bash
-# OpenRouter
-NEREUS_RUN_LIVE=1 LLM_PROVIDER=openrouter OPENROUTER_API_KEY=<key> \
-  OPENROUTER_MODEL=openrouter/free pytest -m "not skip" tests/integration/test_live_openrouter.py
-```
+---
 
 ## Быстрый старт
 
 ```bash
-# Локальный запуск: CLI‑прототип (human-in-the-loop через input; офлайн по умолчанию)
+git clone https://github.com/nereuslabs/Nereus.git
+cd Nereus
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# старт (первичный запуск — сохраняет сессию в SQLite)
+# Офлайн‑демо (LLM_PROVIDER=stub) — ничего дополнительно не нужно
 python main.py
 
-# возобновить прерванную/сохранённую сессию по thread_id
-python main.py --resume nereus-demo
-
-# Web UI на базе Chainlit (по умолчанию LLM_PROVIDER=stub — офлайн)
+# Web UI на http://localhost:7457
 chainlit run src/nereus/ui/app.py
+```
 
-# OpenRouter (рекомендуется): агрегатор, ничего локально не тащить
-LLM_PROVIDER=openrouter OPENROUTER_API_KEY=<key> python main.py
+Новый запуск → `--new-session`, возобновление → `--resume <thread_id>` или
+`--session-id <id> --user-id <uuid>` (см. [Multi-user sessions](#multi-user-sessions)).
 
-# Через Docker (сервис nereus-ui на http://localhost:7457)
-docker compose up -d --build ui
-docker compose --profile ragger run --rm ingest   # загрузить материалы в ChromaDB
+---
+
+## Конфигурация (`.env`)
+
+Все параметры читаются через Pydantic‑settings (`src/nereus/config/settings.py`).
+Скопируйте шаблон:
+
+```bash
+cp .env.example .env
+```
+
+| Группа | Переменная | По умолчанию | Описание |
+|--------|-----------|--------------|----------|
+| LLM | `LLM_PROVIDER` | `stub` | `stub` \| `openrouter` |
+| LLM | `OPENROUTER_API_KEY` | — | ключ OpenRouter (опционален) |
+| LLM | `OPENROUTER_MODEL` | `openrouter/free` | модель чата |
+| LLM | `OPENROUTER_TIMEOUT` | `60` | таймаут запроса, с |
+| Embeddings | `EMBEDDING_PROVIDER` | `stub` | `stub` \| `sentence_transformers` \| `openrouter` |
+| RAG | `CHROMADB_HOST` | `localhost` | хост ChromaDB |
+| RAG | `CHROMADB_PORT` | `8000` | порт ChromaDB |
+| Session | `CHECKPOINTER` | `memory` | `memory` \| `sqlite` \| `redis` |
+| Session | `CHECKPOINT_DB` | `.checkpoints/nereus.sqlite3` | путь к SQLite‑чекпоинтеру |
+| Session | `SESSION_ROOT` | `.sessions` | `{root}/{user_id}/{session_id}.json` |
+| Multi-user | `USER_STORAGE` | `sqlite` | `sqlite` \| `redis` \| `memory` |
+| Multi-user | `USER_DB_PATH` | `.users/users.sqlite3` | SQLite БД профилей |
+| Multi-user | `REDIS_HOST` | `localhost` | Redis (для `USER_STORAGE=redis`/`CHECKPOINTER=redis`) |
+| Multi-user | `REDIS_PORT` | `6379` | порт Redis |
+| Diagnostic | `RUN_DIAGNOSTIC` | `false` | запускать квиз до roadmap |
+| Diagnostic | `DIAGNOSTIC_QUESTION_COUNT` | `5` | число вопросов |
+| Tests | `NEREUS_RUN_LIVE` | `0` | `=1` включает live‑интеграционные тесты |
+
+---
+
+## Архитектура
+
+```
+main.py ──► src/nereus/core/graph.py  (LangGraph StateGraph)
+                 │
+            ┌────┴────┐
+            │ NereusState │  (pydantic TypedDict)
+            └────┬────┘
+        ┌────────┼────────┐
+        │ Coach  │ Tutor  │ Examiner │   agents/* + llm/*
+        │ (roadmap)│ (materials)│ (assessment)│
+        └────────┼────────┘
+                 ▼
+        llm/inference.py  (StructuredInferenceClient, retry x2)
+                 │
+   LLM_PROVIDER = stub | openrouter
+```
+
+Слои: **Automaton** (`core/graph.py`, `core/factory.py`), **LLM runtime**
+(`llm/`), **память** (`core/session.py`, `core/context.py`), **RAG**
+(`db/chroma.py`, `llm/retriever.py`), **хранилище пользователей**
+(`core/user_store.py`), **UI** (`ui/app.py`).
+
+---
+
+## Использование
+
+### CLI
+
+```bash
+# Новый автотест (LLM_PROVIDER=stub)
+python main.py --new-session --user-id <uuid>
+
+# С диагностикой навыка
+python main.py --new-session --user-id <uuid> --diagnostic
+
+# Возобновить сессию
+python main.py --session-id <uuid> --user-id <uuid>
+python main.py --resume <thread_id>            # checkpoints (CHECKPOINTER=sqlite)
+
+# Harness: end-to-end trace в artifacts/run.jsonl
+LLM_PROVIDER=stub python -m nereus.scripts.eval_chain --dry-run --diagnostic --skill "Python"
 ```
 
 ### Web UI (Chainlit)
 
-`src/nereus/ui/app.py` — диалоговый web‑клиент: собирает профиль, стримит roadmap →
-material → assessment, задаёт вопросы экзаменатора и возобновляет граф через
-`Command(resume=...)`. Поддерживает офлайн‑режим (`LLM_PROVIDER=stub`) и реальную
-модель через OpenRouter. Состояние сессии (material, retrieved_chunks, assessment) рендерится
-по‑шагово; `thread_id` хранится в `cl.user_session` для cross‑restart resume
-(требует persistent checkpointer — см. issue #16).
-
 ```bash
-# офлайн‑демо (stub embeddings)
 chainlit run src/nereus/ui/app.py
-
-# OpenRouter (рекомендуется): чат + эмбеддинги через агрегатор
-LLM_PROVIDER=openrouter OPENROUTER_API_KEY=<key> \
-  EMBEDDING_PROVIDER=openrouter \
+# OpenRouter + embeddings
+LLM_PROVIDER=openrouter OPENROUTER_API_KEY=<key> EMBEDDING_PROVIDER=openrouter \
   chainlit run src/nereus/ui/app.py
 ```
 
 ### Multi-user sessions (Issue #8/#57)
 
-Nereus поддерживает несколько независимых пользовательских сессий в одном
-deployment. Каждая сессия сохраняет профиль, roadmap, прогресс и диагностическое
-состояние на диск и может быть восстановлена между перезапусками.
+Каждая сессия сохраняет профиль, roadmap и прогресс в `SESSION_ROOT` и может
+восстанавливаться между перезапусками:
 
 ```bash
-# Создать новую сессию (генерируется session_id)
-python main.py --new-session --user-id <uuid>
-
-# Возобновить существующую сессию по session_id
-python main.py --session-id <uuid> --user-id <uuid>
+python main.py --new-session --user-id <uuid>                 # создать
+python main.py --session-id <uuid> --user-id <uuid>           # возобновить
 ```
 
-- **`--new-session`** — генерирует новый `session_id` (UUID4) и запускает чат с чистого листа.
-- **`--session-id <id>`** — загружает ранее сохранённую сессию из `SESSION_ROOT/{user_id}/{session_id}.json`.
-- **`--user-id <id>`** — идентификатор пользователя для sharding файлов сессий.
-- **`--resume <thread_id>`** — восстанавливает LangGraph checkpoints (SQLite checkpointer).
-
-Файлы сессий хранятся в `SESSION_ROOT` (по умолчанию `.sessions/`), что обеспечивает
-изоляцию между пользователями даже при совпадении `session_id`.
-
-Профили пользователей (UserProfile) сохраняются через `UserStore` в SQLite
-(`.users/users.sqlite3` по умолчанию), в Redis (при `USER_STORAGE=redis`) либо
-в памяти при недоступности БД. Redis‑бекенд деградирует в память, если Redis
-недоступен — сервис не падает.
-
-```env
-# .env — persistence & multi-user (Issue #8/#57)
-USER_STORAGE=sqlite        # sqlite | redis | memory
-USER_DB_PATH=.users/users.sqlite3
-# redis (used when USER_STORAGE=redis)
-REDIS_HOST=redis
-REDIS_PORT=6379
-
-# session snapshots (Issue #57)
-SESSION_ROOT=.sessions      # {root}/{user_id}/{session_id}.json
-```
+`UserStore` сохраняет профили в SQLite (по умолчанию), Redis (`USER_STORAGE=redis`)
+либо в памяти — Redis‑бекенд деградирует в память при недоступности, сервис не падает.
 
 ### Диагностика навыков (Issue #7)
 
-Перед генерацией roadmap бот может пройти пользователя кратким диагностическим
-квизом (3–5 вопросов), оценить ответы и построить **адаптивную** дорожную карту,
-ориентированную на слабые зоны.
-
-```bash
-# CLI: включить диагностический этап
-python main.py --new-session --user-id <uuid> --diagnostic
-
-# Harness
-LLM_PROVIDER=stub python -m nereus.scripts.eval_chain --dry-run --diagnostic --skill "Python"
-```
-
-```env
-# .env — diagnostic (Issue #7)
-RUN_DIAGNOSTIC=true          # запускать квиз до roadmap (default: false)
-DIAGNOSTIC_QUESTION_COUNT=5  # число вопросов (default: 5)
-```
-
-В офлайн‑тестах диагностика выключена принудительно (autouse‑фикстура
-`_force_stub_offline` в `tests/conftest.py`), чтобы `RUN_DIAGNOSTIC=true` из
-`.env` не ломал регрессионные тесты экзаменатора; специализированные тесты
-включают её через `build_nereus_graph(run_diagnostic=True)`.
+Перед генерацией roadmap бот проходит краткий квиз (3–5 вопросов), оценивает
+ответы и строит адаптивную дорожную карту по слабым зонам. Включается через
+`--diagnostic` / `RUN_DIAGNOSTIC=true`. В офлайн‑тестах диагностика выключена
+autouse‑фикстурой `_force_stub_offline` в `tests/conftest.py`.
 
 ### Локальный RAG (demo)
 
-RAG‑хранилище (ChromaDB) наполняется из `materials/` скриптом
-`scripts/ingest_materials.py`. По умолчанию используются `EMBEDDING_PROVIDER=stub`
-(офлайн, fake‑векторы), но retrieval работает структурно так же, как с
-реальными эмбеддингами.
-
 ```bash
-# 1. поднять ChromaDB (и опционально UI через OpenRouter)
 docker compose up -d chromadb
-
-# 2. загрузить материалы (offline, stub embeddings)
 python scripts/ingest_materials.py --materials materials --clear
-
-# 3. (опционально) пробный прогон без записи в ChromaDB
-python scripts/ingest_materials.py --dry-run --materials materials
-
-# 4. запустить автомат (RAG‑retrieval будет подхватывать материалы)
 LLM_PROVIDER=stub python main.py
 ```
 
-Через Docker (профиль `ragger`, чтобы `ingest` не стартовал в `up` по умолчанию):
+---
 
-```bash
-docker compose --profile ragger run --rm ingest     # загрузить материалы
-docker compose up -d ui                             # Web UI на http://localhost:7457
-```
-
-Формат файла материала: `*.md` в `--materials` (`<topic_id>.md`, где `topic_id` —
-ведущие цифры имени файла, совпадают с `RoadmapTopic.id`, напр. `1.md` → тема 1).
-
-#### Cloud: чат + эмбеддинги через OpenRouter
-
-Чат и эмбеддинги оба идут через один `OPENROUTER_API_KEY`; `openrouter/free`
-покрывает лимиты для демо‑трафика (платные модели — по‑требности). Ранее чат
-шёл через Ollama Cloud, а эмбеддинги — через локальный `ollama serve`
-(«гибрид», чтобы не платить за эмбеддинги в Cloud); после миграции на OpenRouter
-этот разворот стал избыточным и удалён (#46).
-
-```bash
-# OpenRouter — один токен для чата и эмбеддингов
-export LLM_PROVIDER=openrouter
-export OPENROUTER_API_KEY=<key>
-export OPENROUTER_MODEL=openrouter/free
-export EMBEDDING_PROVIDER=openrouter
-export OPENROUTER_EMBED_MODEL=openai/text-embedding-3-small
-```
-
-## Тесты и линтер
+## Тесты и качество
 
 ```bash
 ruff check .
-pytest
+ruff format --check .
+pytest                      # 174 passed, 2 skipped (live gated by NEREUS_RUN_LIVE=1)
+NEREUS_RUN_LIVE=1 pytest     # + live‑интеграционные с OpenRouter
 ```
+
+CI (`.github/workflows/ci.yml`) запускает всё выше на push/PR в `develop` и `main`.
+
+---
+
+## Docker
+
+```bash
+docker compose up -d --build ui                 # Web UI http://localhost:7457
+docker compose --profile ragger run --rm ingest  # загрузить материалы в ChromaDB
+docker compose up -d --build app                # CLI‑runtime
+```
+
+`docker-compose.yml` поднимает `app`, `ui`, `ingest`, `chromadb`, `redis`.
+
+---
 
 ## Структура
 
 ```text
 src/nereus/
-├── config/
-│   └── settings.py        # pydantic-settings (.env): LLM/RAG/Chroma параметры
-├── core/
-│   ├── state.py           # NereusState TypedDict + домены (UserProfile, Roadmap, Assessment)
-│   ├── router.py          # условные переходы автомата (route_after_exam)
-│   ├── graph.py           # сборка StateGraph + trim_context; retrieval в tutor_*
-│   ├── factory.py         # build_nereus_graph — централизованная сборка + наблюдаемость
-│   ├── persistence.py     # build_checkpointer (memory/sqlite/redis), msgpack allowlist
-│   ├── session.py         # LearningSession (агрегация прогресса/слабых мест, dump/load)
-│   └── context.py         # truncate_messages / summarize_history (RLHF‑ready)
-│   └── db/
-│       └── chroma.py      # ChromaStore (upsert/search по темам)
-├── agents/                # Coach / Tutor / Examiner (structured inference; offline‑stub fallback)
-├── llm/
-│   ├── base.py            # LLMProvider (абстракция)
-│   ├── stub.py            # in-memory LLM‑провайдер (тесты/без сети)
-│   ├── schema.py          # Pydantic‑контракты ответов + parse_structured
-│   ├── params.py          # ModelParams + per-role таблица
-│   ├── prompts.py         # реестр system‑prompts + билдеры с session_brief
-│   ├── inference.py       # StructuredInferenceClient (ретраи + LLMUnavailableError)
-│   ├── factory.py         # build_llm_provider (stub | openrouter)
-│   ├── openrouter.py      # OpenRouter chat LLM provider + OpenRouterError
-│   ├── embed.py           # Embedder (stub | sentence_transformers | openrouter)
-│   └── retriever.py       # Retriever (stub | ChromaRetriever) + RetrievedChunk
-└── ui/app.py              # Chainlit Web UI driver (Step 5)
+├── config/settings.py     # pydantic-settings (.env): LLM/RAG/session параметры
+├── core/graph.py          # StateGraph + trim_context, диагностический entry
+├── core/factory.py        # build_nereus_graph — централизованная сборка
+├── core/persistence.py    # checkpointer (memory/sqlite/redis)
+├── core/session.py        # LearningSession (агрегация прогресса/слабых мест)
+├── core/user_store.py     # UserStore (sqlite) + UserStoreRedis + factory
+├── core/router.py         # условные переходы автомата
+├── core/context.py        # truncate/summarize
+├── db/chroma.py           # ChromaStore (upsert/search по темам)
+├── agents/                # Coach / Tutor / Examiner / Diagnostic
+├── llm/                   # провайдеры, схемы, промпты, inference, embeddings
+└── ui/app.py              # Chainlit Web UI
+tests/                     # unit/ + integration/ (live gated by NEREUS_RUN_LIVE=1)
+scripts/                   # eval_chain.py, ingest_materials.py
 ```
+
+---
+
+## Ветвление и релизы
+
+GitHub Flow с интеграционной веткой `develop`:
+
+- feature‑ветки → Pull Request **на `develop`** → squash/merge (CI зелёный).
+- `develop` — защищена (strict status checks, linear history, enforce admins).
+- `main` — релизная ворота, управляется репо‑rulesетом (review + статус‑чек);
+  релисы back‑portятся из `develop` через PR с `--admin`‑слиянием (см. `CLAUDE.md`).
+- Теги `vX.Y.Z` и GitHub Release наносятся на `main`.
+
+Текущие версии: **v1.1.0** (MVP 1.1) — адаптивная диагностика + мульти‑пользовательские сессии; **MVP 1.0** (Steps 1–6) завершён. Смотрите [доску проекта](https://github.com/orgs/nereuslabs/projects/1) и [milestones](https://github.com/nereuslabs/Nereus/milestones).
+
+---
+
+## Участие
+
+Разворачивайтесь, находите задачу со [меткой `good first issue`](https://github.com/nereuslabs/Nereus/issues)
+или `help wanted` — см. [CONTRIBUTING.md](CONTRIBUTING.md). Комментарии в коде — на
+английском, issues/PR — на русском. Спасибо, что помогаете **Nereus**! 🚀

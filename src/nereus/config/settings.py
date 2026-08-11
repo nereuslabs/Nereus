@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     # --- LearningSession dump/load (issue #22 runtime wiring) ---
     session_path: str = ".sessions/{thread_id}.json"  # pattern, {thread_id} substituted
 
+    # --- Multi-user sessions (P1, issue #8/#57) ---
+    session_root: str = ".sessions"  # root: {root}/{user_id}/{session_id}.json
+    user_storage: str = "sqlite"  # sqlite | redis | memory
+    user_db_path: str = ".users/users.sqlite3"
+
     # --- Diagnostic (Issue #7) ---
     run_diagnostic: bool = False  # Run diagnostic quiz before roadmap generation
     diagnostic_question_count: int = 5

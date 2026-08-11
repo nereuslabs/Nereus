@@ -73,6 +73,12 @@ def _force_stub_offline(monkeypatch, request) -> None:
     monkeypatch.setattr(s, "llm_provider", "stub")
     monkeypatch.setattr(s, "embedding_provider", "stub")
     monkeypatch.setattr(s, "checkpoint_backend", "sqlite")
+    # Diagnostic quiz is opt-in via RUN_DIAGNOSTIC (#7). Pin it off for offline
+    # tests so a developer's `.env` (or the project default) doesn't drag every
+    # graph build into the diagnostic/interrupt path and break the existing
+    # examiner-loop tests. Tests that exercise the diagnostic flow set
+    # `run_diagnostic=True` explicitly through build_nereus_graph().
+    monkeypatch.setattr(s, "run_diagnostic", False)
 
 
 @pytest.fixture

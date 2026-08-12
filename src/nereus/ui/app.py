@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from pathlib import Path
 from typing import Any, Mapping
 
 import chainlit as cl
@@ -18,7 +19,9 @@ from nereus.config.settings import settings
 from nereus.core.factory import build_nereus_graph
 from nereus.core.graph import NereusGraph
 from nereus.core.persistence import CheckpointBackend, build_checkpointer
+from nereus.core.session import UserSession, session_path_for
 from nereus.core.state import UserLevel, UserProfile
+from nereus.core.user_store import build_user_store
 from nereus.llm.inference import LLMUnavailableError
 
 logger = logging.getLogger("nereus.ui")
@@ -166,7 +169,10 @@ class UIApp:
         self,
         graph: "NereusGraph | None" = None,
         thread_id: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
         checkpointer=None,
+        run_diagnostic: bool = False,
     ) -> None:
         if checkpointer is not None:
             self._checkpointer = checkpointer
@@ -176,13 +182,31 @@ class UIApp:
                 CheckpointBackend(cp_backend) if isinstance(cp_backend, str) else cp_backend
             )
             logger.info("UIApp checkpointer: %s", type(self._checkpointer).__name__)
+        self.user_id = user_id
+        self.session_id = session_id or str(uuid.uuid4())
+        self.thread_id = thread_id or (
+            f"{user_id}:{self.session_id}" if user_id else str(uuid.uuid4())
+        )
         self.graph: NereusGraph = (
             graph
             if graph is not None
-            else build_nereus_graph(interactive=True, checkpointer=self._checkpointer)
+            else build_nereus_graph(
+                interactive=True,
+                checkpointer=self._checkpointer,
+                user_id=user_id,
+                session_id=self.session_id,
+                run_diagnostic=run_diagnostic,
+            )
         )
-        self.thread_id = thread_id or str(uuid.uuid4())
-        self.config: dict[str, Any] = {"configurable": {"thread_id": self.thread_id}}
+        # config carries user_id/session_id so the graph can resume persisted
+        # UserSession snapshots (#8/#57) and write per-user session files.
+        configurable: dict[str, Any] = {
+            "thread_id": self.thread_id,
+            "session_id": self.session_id,
+        }
+        if user_id is not None:
+            configurable["user_id"] = user_id
+        self.config: dict[str, Any] = {"configurable": configurable}
         self.profile: UserProfile | None = None
         # Last rendered value per logical field; used to deduplicate chat
         # messages under stream_mode="values" (LangGraph re-emits the whole
@@ -285,14 +309,134 @@ class UIApp:
 
 @cl.on_chat_start
 async def on_chat_start() -> None:
-    profile = await collect_profile()
-    thread_id = cl.user_session.get("thread_id") or str(uuid.uuid4())
-    cl.user_session.set("thread_id", thread_id)
-    app = UIApp(thread_id=thread_id)
+    profile, user_id = await select_or_create_user()
+    # Resume per-user history if available; otherwise start fresh.
+    resume_session = await resume_last_session(user_id)
+    session_id = resume_session or str(uuid.uuid4())
+
+    cl.user_session.set("user_id", user_id)
+    cl.user_session.set("session_id", session_id)
+    # thread_id carries user:session so the LangGraph checkpointer resumes the
+    # right history across page reloads (#8/#57).
+    cl.user_session.set("thread_id", f"{user_id}:{session_id}")
+
+    app = UIApp(
+        thread_id=cl.user_session.get("thread_id"),
+        user_id=user_id,
+        session_id=session_id,
+        run_diagnostic=settings.run_diagnostic,
+    )
     app.profile = profile
     cl.user_session.set("app", app)
 
+    if resume_session:
+        await cl.Message(
+            content=f"👋  Возвращаемся! Продолжаю вашу сессию «{session_id[:8]}».\n"
+            f"🗺️  Строю дорожную карту для «{profile.goal}» "
+            f"(уровни: {profile.current_level.value} → {profile.target_level.value})…"
+        ).send()
+    else:
+        await cl.Message(
+            content=f"🗺️  Строю дорожную карту для «{profile.goal}» "
+            f"(уровни: {profile.current_level.value} → {profile.target_level.value})…"
+        ).send()
     await _run_app_session(app, profile)
+
+
+async def select_or_create_user() -> tuple[UserProfile, str]:
+    """Let the user pick an existing profile or register a new one.
+
+    Backed by :class:`UserStore` (sqlite/redis/memory per ``USER_STORAGE``).
+    The very first chat with no registered users auto-creates one so the UI
+    stays usable without any setup (#8/#57)."""
+    try:
+        store = build_user_store()
+    except Exception as exc:  # noqa: BLE001  — keep UI alive if DB is misconfigured
+        logger.warning("UserStore unavailable (%s); running single-session", exc)
+        profile = await collect_profile()
+        return profile, str(uuid.uuid4())
+
+    users = store.list_users()
+    if not users:
+        await cl.Message(content="👤  Первый запуск — создадим ваш профиль.").send()
+        profile = await collect_profile()
+        uid = store.create_user(profile)
+        logger.info("created user %s", uid[:8])
+        return profile, uid
+
+    names = [f"{uid[:8]} — {p.skill} ({p.current_level.value})" for uid, p in users]
+    await cl.Message(content=f"👥  Зарегистрировано {len(users)} пользователей:").send()
+    choice = await cl.AskUserMessage(
+        content=(
+            "Выберите пользователя:\n"
+            + "\n".join(f"{i + 1}) {n}" for i, n in enumerate(names))
+            + "\n0) 🌱  Новый пользователь"
+        ),
+        timeout=600,
+    ).send()
+    raw = _answer_text(choice).strip()
+    try:
+        idx = int(raw)
+    except ValueError:
+        idx = 0
+    if idx == 0 or not (0 < idx <= len(users)):
+        profile = await collect_profile()
+        uid = store.create_user(profile)
+        logger.info("created user %s", uid[:8])
+        return profile, uid
+    uid, profile = users[idx - 1]
+    await cl.Message(content=f"👋  Продолжим с «{profile.skill}».").send()
+    return profile, uid
+
+
+async def resume_last_session(user_id: str) -> str | None:
+    """Offer to resume the most recent session for ``user_id``.
+
+    Lists the last 5 ``UserSession`` snapshots under
+    ``{SESSION_ROOT}/{user_id}/`` and lets the user pick one (or start fresh).
+    Returns the chosen ``session_id`` or ``None``."""
+    try:
+        root = Path(settings.session_root) / user_id if user_id else None
+        if root is None or not root.exists():
+            return None
+        files = sorted(root.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:5]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("session history scan failed (%s); starting fresh", exc)
+        return None
+    if not files:
+        return None
+
+    options = []
+    labels = []
+    for f in files:
+        sid = f.stem
+        path = session_path_for(user_id, sid)
+        try:
+            sess = UserSession.load(path)
+            n = len(sess.roadmap.topics) if sess.roadmap else 0
+            title = f.stem[:8]
+            labels.append(f"{title} — {n} тем")
+        except Exception:  # noqa: BLE001
+            labels.append(sid[:8])
+        options.append(sid)
+
+    await cl.Message(content="📂  Ваши последние сессии:").send()
+    choice = await cl.AskUserMessage(
+        content=(
+            "Выберите сессию для продолжения:\n"
+            + "\n".join(f"{i + 1}) {label}" for i, label in enumerate(labels))
+            + "\n0) 🆕  Новое обучение"
+        ),
+        timeout=600,
+    ).send()
+    raw = _answer_text(choice).strip()
+    try:
+        idx = int(raw)
+    except ValueError:
+        idx = 0
+    if 0 < idx <= len(options):
+        return options[idx - 1]
+    return None
 
 
 async def _run_app_session(app: UIApp, profile: UserProfile) -> None:

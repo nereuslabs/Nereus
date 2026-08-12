@@ -1,57 +1,44 @@
 # Nereus Wiki
 
-> Интерактивный ассистент по обучению: LLM‑агент, который разбирает ваш roadmap,
-> задаёт вопросы, проверяет знания и адаптирует план — всё через обычный
-> диалог в терминале/браузере.
+> Интерактивный «машина учёбы»: LLM‑агент, который разбирает ваш roadmap,
+> задаёт вопросы, проверяет знания и адаптирует план — всё через диалог в
+> терминале или в Web UI (Chainlit).
 
 ## Содержание
 - [Architecture](Architecture.md)
-- [Roadmap](Roadmap.md)
 - [Development](Development.md)
-- [Migration guide](MIGRATE.md) (перенести `docs/wiki/` в настоящий GitHub Wiki)
+- [Roadmap](Roadmap.md)
+- [Releases](https://github.com/nereuslabs/Nereus/releases)
 
 ## Статус
-- ✅ **Step 1** — MVP learning automaton (LangGraph)
-- ✅ **Step 2** — LLM provider abstraction + Ollama · **(Step 6)** OpenRouter integration (chat + embeddings, replaces Ollama Cloud)
-- ✅ **Step 3** — LLM runtime, prompt registry, schema validation, session memory
-- ✅ **Step 4** — ChromaDB RAG (embeddings, retriever, tutor integrate)
-- ✅ **Step 5** — Chainlit Web UI (`src/nereus/ui/app.py`)
-- ✅ **Step 6** — Persistent session dump/load (`LearningSession` ↔ JSON, runtime-wired #22)
-  + persistent checkpointer (sqlite default, redis fallback)
 
-Первая полностью рабочая версия — **MVP 1.0 GA** — отслеживается в
-[MVP 1.0](https://github.com/nereuslabs/Nereus/milestones/1).
+**Репо:** `nereuslabs/Nereus` (ранее `Yan123-tech/Nereus`).
+
+| Версия | Статус | Что входит |
+|--------|--------|------------|
+| **v1.1.0** | ✅ Released (на `main`) | Адаптивная диагностика (#7) + мульти‑пользовательские сессии + Redis `UserStore` (#8, #57) |
+| **v1.0.0** | ✅ Released | Шаги 1–6: автомат‑агент, LLM‑абстракция, RAG, Chainlit‑UI, персистентные сессии |
+
+Этапы (см. Milestones и доску проекта):
+- Шаг 1 ✅ — базовый автомат‑агент (LangGraph, LLM runtime, промпты, память). В `develop`.
+- Шаг 2 ✅ — абстракция LLM‑провайдера (`stub` + `openrouter`).
+- Шаг 3 ✅ — inference‑клиент с ретраями, схемы/промпты, CLI‑харнес (`scripts/eval_chain.py`).
+- Шаг 4 ✅ — RAG: эмбеддинги + ChromaDB (`db/chroma.py`) + retrieval в узлах графа.
+- Шаг 5 ✅ — Chainlit Web‑UI (`src/nereus/ui/app.py`).
+- Шаг 6 ✅ — Персистентная сессия + чекпоинтеры (`sqlite`/`redis`/`memory`).
+- Шаг 7 ✅ — Адаптивная диагностика навыков (#7).
+- Шаг 8 ✅ — Мульти‑пользовательские профили + сессии (#8, #57).
+
+Ветвление — **GitHub Flow** с integration‑веткой `develop`: feature‑ветки → PR (base `develop`) → squash/merge. Релизы — обратно из `develop` в `main` через `--admin`‑слияние (см. `CLAUDE.md`).
 
 ## Быстрый старт
+
 ```bash
+git clone https://github.com/nereuslabs/Nereus.git
+cd Nereus
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-
-# CLI (human-in-the-loop через input; офлайн по умолчанию)
-python main.py
-python main.py --resume nereus-demo          # возобновить сессию
-
-# Web UI на базе Chainlit (:7457)
-chainlit run src/nereus/ui/app.py
-
-# Через Docker (сервис nereus-ui на http://localhost:7457)
-docker compose up -d --build ui
+python main.py      # LLM_PROVIDER=stub → полностью офлайн
 ```
 
-## Тесты
-```bash
-ruff check . && ruff format --check .
-pytest                                    # 99 passed, 2 skipped (live)
-NEREUS_RUN_LIVE=1 pytest                  # + OpenRouter/Redis/SQLite live
-```
-
-Ссылки: [Architecture](Architecture.md) | [Roadmap](Roadmap.md) | [Development](Development.md) | [Migration guide](MIGRATE.md)
-
-### Конфиг (.env, все опциональны)
-| Параметр | Знач. по умолчанию | Описание |
-|---|---|---|
-| `LLM_PROVIDER` | `stub` | `stub \| openrouter` |
-| `EMBEDDING_PROVIDER` | `stub` | `stub \| sentence_transformers \| openrouter` |
-| `CHECKPOINTER` | `memory` | `memory \| sqlite \| redis` (default `memory`, офлайн) |
-| `SESSION_PATH` | `.sessions/{thread_id}.json` | файл сессии |
-| `CHROMADB_HOST` | `localhost` | ChromaDB для RAG |
+Подробнее — в [README](https://github.com/nereuslabs/Nereus#readme) и [Development](Development.md).

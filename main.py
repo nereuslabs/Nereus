@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--checkpoint-backend",
         choices=["memory", "sqlite", "redis"],
-        help="Override CHECKPOINTER env setting",
+        help="Override CHECKPOINT_BACKEND env setting",
     )
     parser.add_argument(
         "--session-path",

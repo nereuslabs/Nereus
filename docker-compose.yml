@@ -1,5 +1,10 @@
 services:
   app:
+    # Interactive CLI (python main.py uses input()/human-in-the-loop). Gated behind a
+    # profile so a plain `docker compose up` does NOT start a TTY-less CLI that
+    # would immediately EOFError on stdin. Run on demand, e.g.:
+    #   docker compose --profile cli run --rm app --new-session --user-id <uuid>
+    profiles: ["cli"]
     build:
       context: .
       dockerfile: docker/Dockerfile

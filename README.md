@@ -67,12 +67,12 @@ cp .env.example .env
 | Embeddings | `EMBEDDING_PROVIDER` | `stub` | `stub` \| `sentence_transformers` \| `openrouter` |
 | RAG | `CHROMADB_HOST` | `localhost` | хост ChromaDB |
 | RAG | `CHROMADB_PORT` | `8000` | порт ChromaDB |
-| Session | `CHECKPOINTER` | `memory` | `memory` \| `sqlite` \| `redis` |
+| Session | `CHECKPOINT_BACKEND` | `memory` | `memory` \| `sqlite` \| `redis` |
 | Session | `CHECKPOINT_DB` | `.checkpoints/nereus.sqlite3` | путь к SQLite‑чекпоинтеру |
 | Session | `SESSION_ROOT` | `.sessions` | `{root}/{user_id}/{session_id}.json` |
 | Multi-user | `USER_STORAGE` | `sqlite` | `sqlite` \| `redis` \| `memory` |
 | Multi-user | `USER_DB_PATH` | `.users/users.sqlite3` | SQLite БД профилей |
-| Multi-user | `REDIS_HOST` | `localhost` | Redis (для `USER_STORAGE=redis`/`CHECKPOINTER=redis`) |
+| Multi-user | `REDIS_HOST` | `localhost` | Redis (для `USER_STORAGE=redis`/`CHECKPOINT_BACKEND=redis`) |
 | Multi-user | `REDIS_PORT` | `6379` | порт Redis |
 | Diagnostic | `RUN_DIAGNOSTIC` | `false` | запускать квиз до roadmap |
 | Diagnostic | `DIAGNOSTIC_QUESTION_COUNT` | `5` | число вопросов |
@@ -118,7 +118,7 @@ python main.py --new-session --user-id <uuid> --diagnostic
 
 # Возобновить сессию
 python main.py --session-id <uuid> --user-id <uuid>
-python main.py --resume <thread_id>            # checkpoints (CHECKPOINTER=sqlite)
+python main.py --resume <thread_id>            # checkpoints (CHECKPOINT_BACKEND=sqlite)
 
 # Harness: end-to-end trace в artifacts/run.jsonl
 LLM_PROVIDER=stub python -m nereus.scripts.eval_chain --dry-run --diagnostic --skill "Python"
@@ -181,7 +181,7 @@ CI (`.github/workflows/ci.yml`) запускает всё выше на push/PR 
 ```bash
 docker compose up -d --build ui                 # Web UI http://localhost:7457
 docker compose --profile ragger run --rm ingest  # загрузить материалы в ChromaDB
-docker compose up -d --build app                # CLI‑runtime
+docker compose --profile cli run --rm app --new-session --user-id <uuid>  # CLI (interactive)
 ```
 
 `docker-compose.yml` поднимает `app`, `ui`, `ingest`, `chromadb`, `redis`.

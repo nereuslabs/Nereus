@@ -93,10 +93,10 @@ def build_checkpointer(
 
     Resolution order:
     1. explicit ``backend`` argument
-    2. ``settings.checkpoint_backend`` (``CHECKPOINTER`` env / .env)
+    2. ``settings.checkpoint_backend`` (``CHECKPOINT_BACKEND`` env / .env)
 
     Backends:
-    - ``memory`` — in-memory, per-process (default while ``CHECKPOINTER`` unset).
+    - ``memory`` — in-memory, per-process (default while ``CHECKPOINT_BACKEND`` unset).
     - ``sqlite`` — local file (``settings.checkpoint_db``, default
       ``.checkpoints/nereus.sqlite3``); offline-first.
     - ``redis`` — shared/network (``settings.redis_url``); auto-falls back to

@@ -169,3 +169,27 @@ Agents must synchronize development state with the **Local Kanban Board** locate
 * After implementing & verifying tests: Move card to `3-review` and link the PR branch.
 * Upon merging: Move card to `4-done`.
 * All local board files in `.kanban/` are strictly local to the device and gitignored.
+
+---
+
+## 7. Continuous Dual Synchronization Protocol (Local Kanban + Notion)
+
+To ensure seamless progress tracking for both local agent execution and human project oversight, agents must maintain **continuous dual synchronization**:
+
+### 7.1. Targets & Identifiers
+1. **Local Kanban (On-Device)**: Located at `.kanban/` in the workspace root. Managed via `python3 .kanban/kanban.py`.
+2. **Notion Status Cockpit (Cloud)**:
+   * **Page ID**: `41300ced-bff4-8178-a81f-c6d215179c84`
+   * **Page URL**: `https://app.notion.com/p/41300cedbff48178a81fc6d215179c84?pvs=204`
+
+### 7.2. Synchronization Triggers
+Agents must execute dual synchronization:
+* **After Batches of Changes**: When a coherent set of implementation edits or tests lands.
+* **At Development Stage Transitions**: When progressing from one phase to the next (e.g., P0 -> P1).
+* **On Pull Request Lifecycle**: When opening, updating, or merging a PR.
+* **Before Turn Wrap-Up**: When tasks on the active plan have changed status.
+
+### 7.3. Update Workflow
+1. Update the local card via `.kanban/kanban.py move <task-id> <new-status>`.
+2. Re-render the local board: `python3 .kanban/kanban.py render`.
+3. Update the Notion page using the Notion MCP tool (`update_page`) reflecting current stage statuses and active tasks.

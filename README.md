@@ -19,8 +19,8 @@
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Language-Rust_2021-DEA584?style=for-the-badge&logo=rust&logoColor=white" alt="Rust" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-00BBF9?style=for-the-badge&logo=open-source-initiative&logoColor=white" alt="License: MIT" /></a>
   <a href="https://ratatui.rs/"><img src="https://img.shields.io/badge/UI-Ratatui_TUI-4361EE?style=for-the-badge&logo=gnometerminal&logoColor=white" alt="TUI: Ratatui" /></a>
-  <a href="https://github.com/nereuslabs/nereus/actions"><img src="https://img.shields.io/badge/CI-Passing-00F5D4?style=for-the-badge&logo=githubactions&logoColor=black" alt="CI" /></a>
-  <a href="https://github.com/nereuslabs/nereus/releases"><img src="https://img.shields.io/badge/Version-2.0--alpha-FF0055?style=for-the-badge" alt="Version 2.0" /></a>
+  <a href="https://github.com/nereuslabs/nereus/actions/workflows/ci.yml"><img src="https://github.com/nereuslabs/nereus/actions/workflows/ci.yml/badge.svg?branch=develop" alt="CI Status" /></a>
+  <a href="https://github.com/nereuslabs/nereus/releases"><img src="https://img.shields.io/badge/Version-0.2.0--alpha-FF0055?style=for-the-badge" alt="Version 0.2.0-alpha" /></a>
 </p>
 
 <!-- Quick Navigation -->
@@ -103,6 +103,22 @@ flowchart TD
 | **Tutor** | 📖 | Synthesizes concise theory and delivers hands-on coding challenges. On retry, generates targeted revision modules. |
 | **Examiner** | ⚖️ | Compiles and executes code in a sandbox, evaluates assertions, scores performance, and guides debugging. |
 
+### The 9-Crate Modular Workspace
+
+```
+nereus/
+├── crates/
+│   ├── nereus-core/      # Pure domain models, FSM enums, core subsystem traits (Zero I/O)
+│   ├── nereus-engine/    # State transition orchestrator & Socratic threshold formula
+│   ├── nereus-agents/    # Diagnostic, Coach (DAG sort), Tutor, and Examiner implementations
+│   ├── nereus-llm/       # Stub, OpenRouter, and Anthropic clients with structured retry loop
+│   ├── nereus-sandbox/   # Host scratchpad & Wasmtime in-memory runner with fuel metering
+│   ├── nereus-storage/   # SQLite WAL mode persistence with schema migrations
+│   ├── nereus-tui/       # Ratatui terminal cockpit & animated Socratic Lighthouse
+│   ├── nereus-plugin/    # ModuleRegistry container for Tier-1 runtime hot-switching
+│   └── nereus-cli/       # Main unified executable binary
+```
+
 ---
 
 ## 🚀 Quick Start
@@ -113,24 +129,27 @@ Ensure you have the Rust toolchain installed (MSRV 1.78+):
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-### 2. Installation & Building
+### 2. Building & Testing
 ```bash
 # Clone the repository
 git clone https://github.com/nereuslabs/nereus.git
 cd nereus
 
-# Build the optimized release binary
+# Run all 124 unit and integration tests (zero API tokens required)
+cargo test --workspace
+
+# Build the release binary
 cargo build --release
 ```
 
 ### 3. Launching the Cockpit
 ```bash
-# Launch in Offline Demo Mode (Zero API Key needed!)
-./target/release/nereus --offline
+# Launch in Offline Deterministic Demo Mode
+cargo run -p nereus-cli -- --offline --demo
 
 # Launch with live OpenRouter or Anthropic AI inference
 export NEREUS_API_KEY="sk-..."
-./target/release/nereus --skill "Rust" --level "intermediate"
+cargo run -p nereus-cli -- --skill "Rust" --level "intermediate"
 ```
 
 <details>
@@ -166,12 +185,18 @@ Options:
 
 ## 🗺️ Roadmap to v2.0-stable
 
-- [x] **Phase 0**: Architecture RFC & Domain Model Design ([Specification](assets/NEREUS_2.0_SPEC.md)).
-- [ ] **Phase 1**: Algebraic State Machine & Event Loop implementation.
-- [ ] **Phase 2**: Asynchronous LLM client trait (`StubLLMClient` + `OpenRouterClient`).
-- [ ] **Phase 3**: Diagnostic, Coach, Tutor, and Examiner agents.
-- [ ] **Phase 4**: Ratatui Terminal User Interface (TUI) cockpit with split-pane streaming.
-- [ ] **Phase 5**: WebAssembly (WASM) in-memory code execution sandbox via `wasmtime`.
+- [x] **Phase 0**: Architecture RFC & Domain Model Design ([Specification](docs/ARCHITECTURE.md)).
+- [x] **Phase P0**: 9-Crate Modular Cargo Workspace Scaffold & ModuleRegistry ([Guide](docs/MODULAR_FRAMEWORK.md)).
+- [x] **Phase 1**: Algebraic State Machine & Event Loop implementation (`nereus-engine`).
+- [x] **Phase 2**: Multi-provider LLM runtime (`StubLLMClient`, `OpenRouterClient`, `AnthropicClient`).
+- [x] **Phase 3**: Diagnostic, Coach (DAG sort), Tutor, and Socratic Examiner agents (`nereus-agents`).
+- [x] **Phase 4**: Ratatui Terminal User Interface (TUI) cockpit & Animated Socratic Lighthouse (`nereus-tui`).
+- [x] **Phase 5**: WebAssembly (WASM) in-memory code execution sandbox via `wasmtime` (`nereus-sandbox`).
+- [x] **Phase 6**: SQLite WAL session persistence & declarative schema migrations (`nereus-storage`).
+- [x] **Phase CI**: Automated GitHub Actions CI/CD Quality Gates (`cargo fmt`, `clippy -D warnings`, test suites).
+- [ ] **Phase MVP**: Interactive full-screen terminal event loop, diagnostic quiz widget, and bundled Rust curriculum.
+- [ ] **Phase 7**: Dynamic shared library (`.dylib` / `.so`) Tier-2 hot-reloading host.
+- [ ] **Phase 8**: Single-binary packaging & Homebrew tap distribution.
 
 ---
 

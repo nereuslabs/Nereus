@@ -291,14 +291,6 @@ impl LLMClient for MockSequenceLLMClient {
             Ok(resps.remove(0))
         }
     }
-
-    async fn structured_output<T: serde::de::DeserializeOwned + Send>(
-        &self,
-        prompt: &str,
-    ) -> CoreResult<T> {
-        let raw = self.complete(prompt).await?;
-        serde_json::from_str(&raw).map_err(|e| CoreError::Serialization(e.to_string()))
-    }
 }
 
 #[tokio::test]

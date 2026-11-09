@@ -1,6 +1,8 @@
 //! The Algebraic Finite State Machine (FSM) representation.
 
-use crate::models::{Assessment, DiagnosticQuestion, Roadmap, RoadmapTopic, UserProfile, WeaknessReport};
+use crate::models::{
+    Assessment, DiagnosticQuestion, Roadmap, RoadmapTopic, UserProfile, WeaknessReport,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -15,9 +17,7 @@ pub enum LearningState {
         answers: Vec<String>,
     },
     /// Generating prioritized roadmap based on diagnostic weakness report
-    Coaching {
-        weakness_report: WeaknessReport,
-    },
+    Coaching { weakness_report: WeaknessReport },
     /// Delivering concise theory and interactive challenge
     Tutoring {
         topic: RoadmapTopic,

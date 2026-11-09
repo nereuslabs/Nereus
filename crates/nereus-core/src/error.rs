@@ -8,10 +8,7 @@ pub enum CoreError {
     InvalidTransition(String),
 
     #[error("Agent failure ({agent}): {message}")]
-    AgentFailure {
-        agent: String,
-        message: String,
-    },
+    AgentFailure { agent: String, message: String },
 
     #[error("LLM provider error: {0}")]
     LLMError(String),

@@ -6,10 +6,9 @@ use nereus_core::models::{UserLevel, UserProfile};
 use nereus_engine::LearningAutomaton;
 use nereus_llm::{OpenRouterClient, StubLLMClient};
 use nereus_plugin::ModuleRegistry;
-use nereus_sandbox::{HostSandboxRunner, MockSandboxRunner};
+use nereus_sandbox::MockSandboxRunner;
 use nereus_storage::{MemoryStorage, SqliteStorage};
 use std::sync::Arc;
-use tracing::info;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -28,7 +27,11 @@ pub struct Cli {
     pub level: String,
 
     /// Specific learning goal
-    #[arg(short, long, default_value = "Master concurrency and async Rust idioms")]
+    #[arg(
+        short,
+        long,
+        default_value = "Master concurrency and async Rust idioms"
+    )]
     pub goal: String,
 
     /// Force adaptive diagnostic quiz before roadmap compilation
@@ -53,7 +56,8 @@ pub struct Cli {
 }
 
 fn print_banner() {
-    println!(r#"
+    println!(
+        r#"
                    ▄█▄
                   [***]════════════════════════════════► (Beam of Clarity)
                   █████
@@ -64,7 +68,8 @@ fn print_banner() {
                ▓▓▓▓▓▓▓▓▓▓▓        |_| \_|_____|_| \_\_____|\___/|____/
            ~~~~~~~~~~~~~~~~~~~             T E R M I N A L   A I   M E N T O R
           ~~~~~~~~~~~~~~~~~~~~~                       [ v2.0-rust ]
-    "#);
+    "#
+    );
 }
 
 #[tokio::main]
@@ -99,7 +104,9 @@ async fn main() -> anyhow::Result<()> {
     let llm_client: Arc<dyn nereus_core::traits::LLMClient> = if args.offline {
         println!("🛡️  Mode: Offline Hermetic Stub (Deterministic, Zero API Tokens)");
         Arc::new(StubLLMClient::new())
-    } else if let Ok(key) = std::env::var("NEREUS_API_KEY").or_else(|_| std::env::var("OPENROUTER_API_KEY")) {
+    } else if let Ok(key) =
+        std::env::var("NEREUS_API_KEY").or_else(|_| std::env::var("OPENROUTER_API_KEY"))
+    {
         println!("🌐 Mode: Live AI Inference via OpenRouter");
         Arc::new(OpenRouterClient::new(key, None))
     } else {
@@ -107,9 +114,11 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(StubLLMClient::new())
     };
 
-    let sandbox_runner: Arc<dyn nereus_core::traits::SandboxRunner> = Arc::new(MockSandboxRunner::new(false));
+    let sandbox_runner: Arc<dyn nereus_core::traits::SandboxRunner> =
+        Arc::new(MockSandboxRunner::new(false));
 
-    let storage_backend: Arc<dyn nereus_core::traits::StorageBackend> = if let Some(path) = &args.db {
+    let storage_backend: Arc<dyn nereus_core::traits::StorageBackend> = if let Some(path) = &args.db
+    {
         println!("💾 Storage: SQLite WAL backend at {}", path);
         Arc::new(SqliteStorage::new(path)?)
     } else {
@@ -121,13 +130,19 @@ async fn main() -> anyhow::Result<()> {
     // 2. Initialize the Algebraic FSM
     let mut automaton = LearningAutomaton::new(registry.clone(), profile, args.diagnostic);
 
-    println!("\n🌊 Initializing Socratic Learning Automaton [Session: {}]...", automaton.ctx.session_id);
+    println!(
+        "\n🌊 Initializing Socratic Learning Automaton [Session: {}]...",
+        automaton.ctx.session_id
+    );
     println!("📍 Current State: {}\n", automaton.ctx.state.name());
 
     if args.demo {
         println!("🚀 Running automated lifecycle simulation:\n");
         for step_i in 1..=5 {
-            println!("--- Step {step_i}: Transitioning from {} ---", automaton.ctx.state.name());
+            println!(
+                "--- Step {step_i}: Transitioning from {} ---",
+                automaton.ctx.state.name()
+            );
             let next_state = automaton.step().await?;
             println!("    New State: {}\n", next_state.name());
             if automaton.ctx.is_completed() {

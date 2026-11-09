@@ -140,15 +140,19 @@ impl<C: LLMClient> StructuredClient<C> {
             "Previous output was invalid JSON: {last_error_message}"
         )))
     }
+
+    /// Execute structured output with automatic retry loop on JSON failure.
+    pub async fn structured_output<T: DeserializeOwned + Send>(
+        &self,
+        prompt: &str,
+    ) -> CoreResult<T> {
+        self.structured_output_with_retry(prompt).await
+    }
 }
 
 #[async_trait]
 impl<C: LLMClient> LLMClient for StructuredClient<C> {
     async fn complete(&self, prompt: &str) -> CoreResult<String> {
         self.inner.complete(prompt).await
-    }
-
-    async fn structured_output<T: DeserializeOwned + Send>(&self, prompt: &str) -> CoreResult<T> {
-        self.structured_output_with_retry(prompt).await
     }
 }

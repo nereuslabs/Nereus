@@ -1,6 +1,6 @@
 //! Domain events emitted during FSM transitions.
 
-use crate::models::{Assessment, RoadmapTopic, Verdict};
+use crate::models::Verdict;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

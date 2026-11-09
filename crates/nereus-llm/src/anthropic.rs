@@ -218,16 +218,20 @@ impl AnthropicClient {
 
         Ok(text_parts.join("\n"))
     }
+
+    /// Request structured output deserialized from Anthropic completion.
+    pub async fn structured_output<T: DeserializeOwned + Send>(
+        &self,
+        prompt: &str,
+    ) -> CoreResult<T> {
+        let raw = self.complete(prompt).await?;
+        crate::client::parse_json::<T>(&raw).map_err(|e| CoreError::Serialization(e.to_string()))
+    }
 }
 
 #[async_trait]
 impl LLMClient for AnthropicClient {
     async fn complete(&self, prompt: &str) -> CoreResult<String> {
         self.send_message(prompt).await
-    }
-
-    async fn structured_output<T: DeserializeOwned + Send>(&self, prompt: &str) -> CoreResult<T> {
-        let raw = self.complete(prompt).await?;
-        crate::client::parse_json::<T>(&raw).map_err(|e| CoreError::Serialization(e.to_string()))
     }
 }

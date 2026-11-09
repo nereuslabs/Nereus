@@ -29,6 +29,16 @@ impl StubLLMClient {
         self.canned_json = Some(json.into());
         self
     }
+
+    /// Request structured output deserialized from canned JSON response.
+    pub async fn structured_output<T: DeserializeOwned + Send>(
+        &self,
+        _prompt: &str,
+    ) -> CoreResult<T> {
+        let json_str = self.canned_json.as_deref().unwrap_or("{}");
+        crate::client::parse_json::<T>(json_str)
+            .map_err(|e| CoreError::Serialization(e.to_string()))
+    }
 }
 
 #[async_trait]
@@ -39,11 +49,5 @@ impl LLMClient for StubLLMClient {
         } else {
             Ok("Stub assessment: Task executed with PASS verdict. Mastery confirmed.".to_string())
         }
-    }
-
-    async fn structured_output<T: DeserializeOwned + Send>(&self, _prompt: &str) -> CoreResult<T> {
-        let json_str = self.canned_json.as_deref().unwrap_or("{}");
-        crate::client::parse_json::<T>(json_str)
-            .map_err(|e| CoreError::Serialization(e.to_string()))
     }
 }

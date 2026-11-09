@@ -12,3 +12,8 @@ Cargo.lock
 # Local device-only developer tooling (NOT tracked in git)
 .kanban/
 worktrees/
+
+# Packaging artifacts
+packages/**/vendor/
+node_modules/
+

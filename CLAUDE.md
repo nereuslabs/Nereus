@@ -9,6 +9,8 @@
 
 ## Git & GitHub Workflow
 - **Conventional Commits**: Every commit must follow `<type>(<scope>): <summary>` (see `AGENTS.md`).
+- **Mandatory Remote Lifecycle**: Never keep changes local-only. Push feature branches to GitHub, open tracked Issues (`gh issue create`), and create Pull Requests (`gh pr create`) targeting `develop`.
+- **No AI Watermarks**: Never include AI badges, watermarks, or AI attribution in commit messages, PRs, or issues.
 - **Feature Branches**: Branch from `develop` using `feat/<crate>-<name>` or `fix/<crate>-<name>`.
 - **Integration Lane**: `develop` is the fast-lane branch where all PRs merge with CI checks.
 - **Release Gate**: `main` is protected by repository rulesets (`id=20506063`). Releases are tagged SemVer `vX.Y.Z` on `main`.

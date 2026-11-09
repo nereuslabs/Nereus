@@ -113,6 +113,14 @@ A concise 2-3 sentence overview of what this pull request introduces.
 * Only release promotion PRs target **`main`** (`develop -> main`).
 * Releases on `main` require CI success (`lint-and-test`), admin review, and signed tags.
 
+### 3.4. Mandatory Remote Lifecycle Policy
+Agents must never leave changes local-only. For every feature, bugfix, or subsystem development cycle:
+1. **Remote Branch Push**: Feature branches must be pushed to GitHub (`git push -u origin <branch>`).
+2. **Issue Linkage**: A tracked GitHub Issue must be created or referenced (`Closes #<id>`).
+3. **Pull Request Creation**: A Pull Request matching the template must be formally opened against `develop` via `gh pr create`.
+4. **Clean Integration**: Merges to `develop` must be pushed to remote immediately upon verification.
+5. **No AI Markers**: PR descriptions, commit messages, and issues must never contain AI badges, watermarks, or AI attribution tags.
+
 ---
 
 ## 4. Automated Issue Protocol

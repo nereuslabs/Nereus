@@ -1,0 +1,27 @@
+[package]
+name = "nereus-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Main unified command line interface and binary entrypoint for Nereus 2.0"
+
+[[bin]]
+name = "nereus"
+path = "src/main.rs"
+
+[dependencies]
+nereus-core = { workspace = true }
+nereus-engine = { workspace = true }
+nereus-agents = { workspace = true }
+nereus-llm = { workspace = true }
+nereus-sandbox = { workspace = true }
+nereus-storage = { workspace = true }
+nereus-tui = { workspace = true }
+nereus-plugin = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }

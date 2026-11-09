@@ -501,8 +501,7 @@ fn main() {
     assert!(result.success);
     assert_eq!(result.exit_code, 0);
     assert!(
-        result.stdout.contains("HELLO_FROM_WASMTIME_SANDBOX")
-            || result.stdout.contains("fallback")
+        result.stdout.contains("HELLO_FROM_WASMTIME_SANDBOX") || result.stdout.contains("fallback")
     );
 }
 

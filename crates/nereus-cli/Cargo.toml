@@ -6,6 +6,10 @@ authors.workspace = true
 license.workspace = true
 description = "Main unified command line interface and binary entrypoint for Nereus 2.0"
 
+[lib]
+name = "nereus_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "nereus"
 path = "src/main.rs"
@@ -25,3 +29,4 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
+serde_json = { workspace = true }

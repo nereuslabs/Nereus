@@ -33,7 +33,8 @@ impl LLMClient for OpenRouterClient {
             ]
         });
 
-        let resp = self.client
+        let resp = self
+            .client
             .post("https://openrouter.ai/api/v1/chat/completions")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("HTTP-Referer", "https://nereuslabs.github.io")
@@ -46,7 +47,9 @@ impl LLMClient for OpenRouterClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            return Err(CoreError::LLMError(format!("OpenRouter error {status}: {text}")));
+            return Err(CoreError::LLMError(format!(
+                "OpenRouter error {status}: {text}"
+            )));
         }
 
         let body: serde_json::Value = resp
@@ -64,6 +67,6 @@ impl LLMClient for OpenRouterClient {
 
     async fn structured_output<T: DeserializeOwned + Send>(&self, prompt: &str) -> CoreResult<T> {
         let raw = self.complete(prompt).await?;
-        serde_json::from_str(&raw).map_err(|e| CoreError::Serialization(e.to_string()))
+        crate::client::parse_json::<T>(&raw).map_err(|e| CoreError::Serialization(e.to_string()))
     }
 }

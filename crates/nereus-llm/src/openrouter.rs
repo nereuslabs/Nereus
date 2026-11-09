@@ -64,8 +64,14 @@ impl LLMClient for OpenRouterClient {
 
         Ok(content)
     }
+}
 
-    async fn structured_output<T: DeserializeOwned + Send>(&self, prompt: &str) -> CoreResult<T> {
+impl OpenRouterClient {
+    /// Request structured output deserialized from completion response.
+    pub async fn structured_output<T: DeserializeOwned + Send>(
+        &self,
+        prompt: &str,
+    ) -> CoreResult<T> {
         let raw = self.complete(prompt).await?;
         crate::client::parse_json::<T>(&raw).map_err(|e| CoreError::Serialization(e.to_string()))
     }

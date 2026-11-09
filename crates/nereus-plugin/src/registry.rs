@@ -44,21 +44,30 @@ impl ModuleRegistry {
     /// Hot-switch the active LLM provider at runtime without restarting the FSM loop
     pub async fn hot_switch_llm(&self, new_client: Arc<dyn LLMClient>) {
         let mut guard = self.llm.write().await;
-        info!("Hot-switching LLM provider: {:?} -> {:?}", *guard, new_client);
+        info!(
+            "Hot-switching LLM provider: {:?} -> {:?}",
+            *guard, new_client
+        );
         *guard = new_client;
     }
 
     /// Hot-switch the active execution sandbox at runtime
     pub async fn hot_switch_sandbox(&self, new_sandbox: Arc<dyn SandboxRunner>) {
         let mut guard = self.sandbox.write().await;
-        info!("Hot-switching Sandbox runner: {:?} -> {:?}", *guard, new_sandbox);
+        info!(
+            "Hot-switching Sandbox runner: {:?} -> {:?}",
+            *guard, new_sandbox
+        );
         *guard = new_sandbox;
     }
 
     /// Hot-switch the active storage backend at runtime
     pub async fn hot_switch_storage(&self, new_storage: Arc<dyn StorageBackend>) {
         let mut guard = self.storage.write().await;
-        info!("Hot-switching Storage backend: {:?} -> {:?}", *guard, new_storage);
+        info!(
+            "Hot-switching Storage backend: {:?} -> {:?}",
+            *guard, new_storage
+        );
         *guard = new_storage;
     }
 }

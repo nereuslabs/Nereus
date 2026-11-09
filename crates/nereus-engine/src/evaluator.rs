@@ -1,6 +1,6 @@
 //! Socratic evaluation and dynamic threshold formulas.
 
-use nereus_core::models::{Assessment, RoadmapTopic, Verdict};
+use nereus_core::models::{RoadmapTopic, Verdict};
 
 /// Compute dynamic passing threshold based on topic difficulty:
 /// Formula: min(70.0 + difficulty * 15.0, 85.0)
@@ -25,7 +25,8 @@ pub fn sanitize_socratic_feedback(raw_feedback: &str, verdict: Verdict) -> Strin
         Verdict::Pass => format!("Mastery confirmed. {raw_feedback}"),
         Verdict::Retry => {
             if raw_feedback.is_empty() {
-                "Examine compiler diagnostics and type contracts. What invariant was violated?".to_string()
+                "Examine compiler diagnostics and type contracts. What invariant was violated?"
+                    .to_string()
             } else {
                 format!("Socratic Guidance: {raw_feedback}")
             }

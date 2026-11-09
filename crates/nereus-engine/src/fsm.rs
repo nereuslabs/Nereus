@@ -1,9 +1,10 @@
 //! Algebraic Finite State Machine orchestrator.
 
-use crate::evaluator::{compute_pass_threshold, evaluate_verdict, sanitize_socratic_feedback};
-use nereus_core::error::{CoreError, CoreResult};
-use nereus_core::events::DomainEvent;
-use nereus_core::models::{Assessment, DiagnosticQuestion, Roadmap, RoadmapTopic, UserProfile, Verdict, WeaknessReport};
+use crate::evaluator::{evaluate_verdict, sanitize_socratic_feedback};
+use nereus_core::error::CoreResult;
+use nereus_core::models::{
+    Assessment, DiagnosticQuestion, Roadmap, RoadmapTopic, UserProfile, Verdict, WeaknessReport,
+};
 use nereus_core::state::{LearningState, StateMachineContext};
 use nereus_plugin::ModuleRegistry;
 use tracing::{debug, info, warn};
@@ -29,10 +30,14 @@ impl LearningAutomaton {
         info!("Stepping automaton in state: {}", self.ctx.state.name());
 
         match &self.ctx.state {
-            LearningState::Diagnostic { questions, current_index, answers } => {
+            LearningState::Diagnostic {
+                questions,
+                current_index,
+                answers,
+            } => {
                 let questions = questions.clone();
                 let current_index = *current_index;
-                let answers = answers.clone();
+                let _answers = answers.clone();
 
                 if questions.is_empty() {
                     // Seed initial diagnostic questions
@@ -70,11 +75,20 @@ impl LearningAutomaton {
                 } else if current_index >= questions.len() {
                     // All diagnostic questions answered -> synthesize WeaknessReport and move to Coaching
                     let weakness_report = WeaknessReport {
-                        weak_areas: vec!["Concurrency".to_string(), "Memory Management".to_string()],
-                        recommended_topics: vec!["Arc & Mutex".to_string(), "Async Channels".to_string()],
+                        weak_areas: vec![
+                            "Concurrency".to_string(),
+                            "Memory Management".to_string(),
+                        ],
+                        recommended_topics: vec![
+                            "Arc & Mutex".to_string(),
+                            "Async Channels".to_string(),
+                        ],
                     };
 
-                    info!("Diagnostic completed with weak areas: {:?}", weakness_report.weak_areas);
+                    info!(
+                        "Diagnostic completed with weak areas: {:?}",
+                        weakness_report.weak_areas
+                    );
                     self.ctx.state = LearningState::Coaching { weakness_report };
                 } else {
                     // Still in progress waiting for answers
@@ -82,12 +96,13 @@ impl LearningAutomaton {
                 }
             }
 
-            LearningState::Coaching { weakness_report } => {
+            LearningState::Coaching { weakness_report: _ } => {
                 let topics = vec![
                     RoadmapTopic {
                         id: "topic-1".to_string(),
                         title: "Memory Safety & Ownership Semantics".to_string(),
-                        description: "Deep dive into move semantics, borrowing rules, and RAII.".to_string(),
+                        description: "Deep dive into move semantics, borrowing rules, and RAII."
+                            .to_string(),
                         difficulty: 0.3,
                         prerequisites: vec![],
                         estimated_hours: 2.0,
@@ -95,7 +110,9 @@ impl LearningAutomaton {
                     RoadmapTopic {
                         id: "topic-2".to_string(),
                         title: "Concurrency Primitives & Tokio MPSC".to_string(),
-                        description: "Mastering Arc, Mutex, async tasks, and thread synchronization.".to_string(),
+                        description:
+                            "Mastering Arc, Mutex, async tasks, and thread synchronization."
+                                .to_string(),
                         difficulty: 0.7,
                         prerequisites: vec!["topic-1".to_string()],
                         estimated_hours: 4.0,
@@ -106,8 +123,12 @@ impl LearningAutomaton {
                 self.ctx.current_topic_index = 0;
 
                 if let Some(first_topic) = self.ctx.current_topic().cloned() {
-                    let material = format!("# {}\n\n{}", first_topic.title, first_topic.description);
-                    let task = format!("Implement a working challenge demonstrating: {}", first_topic.title);
+                    let material =
+                        format!("# {}\n\n{}", first_topic.title, first_topic.description);
+                    let task = format!(
+                        "Implement a working challenge demonstrating: {}",
+                        first_topic.title
+                    );
 
                     self.ctx.state = LearningState::Tutoring {
                         topic: first_topic,
@@ -120,7 +141,12 @@ impl LearningAutomaton {
                 }
             }
 
-            LearningState::Tutoring { topic, material: _, task, retry_count } => {
+            LearningState::Tutoring {
+                topic,
+                material: _,
+                task,
+                retry_count: _,
+            } => {
                 // Transition to Examining, ready for student submission
                 self.ctx.state = LearningState::Examining {
                     topic: topic.clone(),
@@ -130,7 +156,12 @@ impl LearningAutomaton {
                 };
             }
 
-            LearningState::Examining { topic, task: _, submission, assessment: _ } => {
+            LearningState::Examining {
+                topic,
+                task: _,
+                submission,
+                assessment: _,
+            } => {
                 let topic = topic.clone();
                 let sub_str = submission.clone().unwrap_or_default();
 
@@ -154,7 +185,11 @@ impl LearningAutomaton {
                     score,
                     verdict,
                     feedback,
-                    weak_areas: if verdict == Verdict::Pass { vec![] } else { vec!["Ownership".to_string()] },
+                    weak_areas: if verdict == Verdict::Pass {
+                        vec![]
+                    } else {
+                        vec!["Ownership".to_string()]
+                    },
                 };
 
                 if verdict == Verdict::Pass {
@@ -162,7 +197,8 @@ impl LearningAutomaton {
                     self.ctx.current_topic_index += 1;
 
                     if let Some(next_topic) = self.ctx.current_topic().cloned() {
-                        let material = format!("# {}\n\n{}", next_topic.title, next_topic.description);
+                        let material =
+                            format!("# {}\n\n{}", next_topic.title, next_topic.description);
                         let task = format!("Solve the challenge for: {}", next_topic.title);
                         self.ctx.state = LearningState::Tutoring {
                             topic: next_topic,
@@ -174,8 +210,14 @@ impl LearningAutomaton {
                         self.ctx.state = LearningState::Completed;
                     }
                 } else {
-                    warn!("Topic {} failed with score {}. Triggering Socratic retry.", topic.title, score);
-                    let material = format!("# Revision: {}\n\nSocratic Hint: {}", topic.title, assessment.feedback);
+                    warn!(
+                        "Topic {} failed with score {}. Triggering Socratic retry.",
+                        topic.title, score
+                    );
+                    let material = format!(
+                        "# Revision: {}\n\nSocratic Hint: {}",
+                        topic.title, assessment.feedback
+                    );
                     let task = format!("Revise your solution for: {}", topic.title);
                     self.ctx.state = LearningState::Tutoring {
                         topic,

@@ -276,6 +276,19 @@ Allowing an AI mentor to compile and run arbitrary user or generated code introd
 
 ---
 
+## 8. Architectural Decision Records (ADRs)
+
+Key architectural decisions are formally documented and tracked in [`docs/adr/`](adr/README.md) using the MADR standard:
+
+* [ADR 0001: Record Architecture Decisions](adr/0001-record-architecture-decisions.md)
+* [ADR 0002: Compile-Time Algebraic State Machine over LangGraph](adr/0002-compile-time-algebraic-state-machine-over-langgraph.md)
+* [ADR 0003: Wasmtime & Host Compiler Dual Execution Sandbox](adr/0003-wasmtime-and-host-compiler-dual-sandbox.md)
+* [ADR 0004: Offline-First Zero-Token Testing Discipline](adr/0004-offline-first-zero-token-testing-discipline.md)
+* [ADR 0005: Ratatui Split-Pane Terminal Cockpit over Web UI](adr/0005-ratatui-split-pane-terminal-cockpit.md)
+* [ADR 0006: Multi-Channel Native Distribution](adr/0006-multi-channel-native-distribution.md)
+
+---
+
 <div align="center">
   <sub>Nereus Labs Architecture Specification • v2.0 • MIT License</sub>
 </div>

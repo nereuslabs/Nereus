@@ -105,6 +105,36 @@ flowchart TD
 
 ### The 9-Crate Modular Workspace
 
+```mermaid
+flowchart TD
+    subgraph UI ["Presentation Layer"]
+        CLI["nereus-cli"]
+        TUI["nereus-tui"]
+    end
+
+    subgraph Core ["Orchestration & Agents"]
+        CORE["nereus-core"]
+        ENGINE["nereus-engine"]
+        AGENTS["nereus-agents"]
+        PLUGIN["nereus-plugin"]
+    end
+
+    subgraph Drivers ["Infrastructure & Engines"]
+        LLM["nereus-llm"]
+        SANDBOX["nereus-sandbox"]
+        STORAGE["nereus-storage"]
+    end
+
+    CLI --> CORE & ENGINE & TUI & STORAGE & PLUGIN
+    TUI --> CORE
+    ENGINE --> CORE & AGENTS & STORAGE
+    AGENTS --> CORE & LLM & SANDBOX
+    PLUGIN --> CORE
+    SANDBOX --> CORE
+    LLM --> CORE
+    STORAGE --> CORE
+```
+
 ```
 nereus/
 ├── crates/

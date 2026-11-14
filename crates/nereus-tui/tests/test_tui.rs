@@ -742,3 +742,51 @@ fn test_event_handler_channel() {
     let ev2 = handler.try_next().unwrap();
     assert_eq!(ev2, AppEvent::Tick);
 }
+
+#[test]
+fn test_provider_hot_switching_modal_toggling_and_action() {
+    let mut app = CockpitApp::new();
+    let mut ctx = make_test_context();
+
+    // 1. Initially dialog is closed
+    assert!(!app.show_provider_dialog);
+
+    // 2. Open dialog with 'p' when outside editor
+    app.set_focus(FocusedPane::Roadmap);
+    let action = app.handle_key(make_key_event(KeyCode::Char('p')), &mut ctx);
+    assert_eq!(action, AppAction::None);
+    assert!(app.show_provider_dialog);
+
+    // 3. Navigate inside dialog
+    app.handle_key(make_key_event(KeyCode::Down), &mut ctx);
+    assert_eq!(app.provider_state.selected_index, 1);
+
+    // 4. Confirm selection with Enter emits SwitchProvider
+    let action = app.handle_key(make_key_event(KeyCode::Enter), &mut ctx);
+    assert_eq!(action, AppAction::SwitchProvider("openrouter".to_string()));
+    assert!(!app.show_provider_dialog);
+    assert!(app
+        .status_message
+        .as_deref()
+        .unwrap()
+        .contains("openrouter"));
+
+    // 5. Cancel with Esc
+    app.handle_key(make_key_event(KeyCode::Char('p')), &mut ctx);
+    assert!(app.show_provider_dialog);
+    app.handle_key(make_key_event(KeyCode::Esc), &mut ctx);
+    assert!(!app.show_provider_dialog);
+
+    // 6. Test F2 shortcut
+    app.handle_key(make_key_event(KeyCode::F(2)), &mut ctx);
+    assert!(app.show_provider_dialog);
+    app.handle_key(make_key_event(KeyCode::Char('q')), &mut ctx);
+    assert!(!app.show_provider_dialog);
+
+    // 7. Test ':' shortcut outside editor
+    app.set_focus(FocusedPane::Task);
+    app.handle_key(make_key_event(KeyCode::Char(':')), &mut ctx);
+    assert!(app.show_provider_dialog);
+    app.handle_key(make_key_event(KeyCode::Esc), &mut ctx);
+    assert!(!app.show_provider_dialog);
+}

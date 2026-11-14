@@ -34,6 +34,8 @@ pub enum AppAction {
     Scrolled { pane: FocusedPane, delta: isize },
     /// Editor text buffer was modified
     BufferModified,
+    /// Request runtime hot-switching to another LLM provider
+    SwitchProvider(String),
 }
 
 /// Asynchronous event handler dispatching crossterm events and periodic ticks.

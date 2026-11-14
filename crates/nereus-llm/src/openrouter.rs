@@ -8,6 +8,7 @@ use serde_json::json;
 
 #[derive(Debug, Clone)]
 pub struct OpenRouterClient {
+    base_url: String,
     api_key: String,
     model: String,
     client: reqwest::Client,
@@ -15,7 +16,20 @@ pub struct OpenRouterClient {
 
 impl OpenRouterClient {
     pub fn new(api_key: impl Into<String>, model: Option<String>) -> Self {
+        Self::with_base_url(
+            "https://openrouter.ai/api/v1/chat/completions",
+            api_key,
+            model,
+        )
+    }
+
+    pub fn with_base_url(
+        base_url: impl Into<String>,
+        api_key: impl Into<String>,
+        model: Option<String>,
+    ) -> Self {
         Self {
+            base_url: base_url.into(),
             api_key: api_key.into(),
             model: model.unwrap_or_else(|| "anthropic/claude-3.5-sonnet".to_string()),
             client: reqwest::Client::new(),
@@ -35,7 +49,7 @@ impl LLMClient for OpenRouterClient {
 
         let resp = self
             .client
-            .post("https://openrouter.ai/api/v1/chat/completions")
+            .post(&self.base_url)
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("HTTP-Referer", "https://nereuslabs.github.io")
             .header("X-Title", "Nereus 2.0")

@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: nereus-${{ github.ref_name }}-linux-x64.tar.gz
+            use_cross: false
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: nereus-${{ github.ref_name }}-linux-arm64.tar.gz
+            use_cross: true
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: nereus-${{ github.ref_name }}-darwin-arm64.tar.gz
+            use_cross: false
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact_name: nereus-${{ github.ref_name }}-darwin-x64.tar.gz
+            use_cross: false
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: nereus-${{ github.ref_name }}-win32-x64.zip
+            use_cross: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross (for aarch64 Linux)
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build release binary
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }} -p nereus-cli
+          else
+            cargo build --release --target ${{ matrix.target }} -p nereus-cli
+          fi
+        shell: bash
+
+      - name: Package archive (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist
+          tar -czvf "dist/${{ matrix.artifact_name }}" -C "target/${{ matrix.target }}/release" nereus
+          cd dist
+          shasum -a 256 "${{ matrix.artifact_name }}" > "${{ matrix.artifact_name }}.sha256"
+        shell: bash
+
+      - name: Package archive (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Compress-Archive -Path "target/${{ matrix.target }}/release/nereus.exe" -DestinationPath "dist/${{ matrix.artifact_name }}"
+          cd dist
+          Get-FileHash -Algorithm SHA256 "${{ matrix.artifact_name }}" | ForEach-Object { "$($_.Hash)  $($_.Path)" } > "${{ matrix.artifact_name }}.sha256"
+        shell: pwsh
+
+      - name: Upload artifact to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

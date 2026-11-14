@@ -790,3 +790,53 @@ fn test_provider_hot_switching_modal_toggling_and_action() {
     app.handle_key(make_key_event(KeyCode::Esc), &mut ctx);
     assert!(!app.show_provider_dialog);
 }
+
+#[test]
+fn test_cockpit_mouse_event_click_to_focus_and_scroll() {
+    use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    use nereus_tui::layout::calculate_cockpit_layout;
+    use ratatui::layout::Rect;
+
+    let area = Rect::new(0, 0, 100, 30);
+    let layout = calculate_cockpit_layout(area);
+    let mut app = CockpitApp::new();
+    assert_eq!(app.focused_pane, FocusedPane::Roadmap);
+
+    // Click inside editor area
+    let mouse_editor = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: layout.code_editor.x + 2,
+        row: layout.code_editor.y + 2,
+        modifiers: KeyModifiers::empty(),
+    };
+    let action = app.handle_mouse(mouse_editor, &layout);
+    assert_eq!(action, AppAction::FocusChanged(FocusedPane::Editor));
+    assert_eq!(app.focused_pane, FocusedPane::Editor);
+
+    // Click inside task theory area
+    let mouse_task = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: layout.task.x + 2,
+        row: layout.task.y + 2,
+        modifiers: KeyModifiers::empty(),
+    };
+    let action = app.handle_mouse(mouse_task, &layout);
+    assert_eq!(action, AppAction::FocusChanged(FocusedPane::Task));
+    assert_eq!(app.focused_pane, FocusedPane::Task);
+
+    // Mouse wheel scroll down
+    let mouse_scroll = MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: 10,
+        row: 10,
+        modifiers: KeyModifiers::empty(),
+    };
+    let action = app.handle_mouse(mouse_scroll, &layout);
+    assert_eq!(
+        action,
+        AppAction::Scrolled {
+            pane: FocusedPane::Task,
+            delta: 1
+        }
+    );
+}

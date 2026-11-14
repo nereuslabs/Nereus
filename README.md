@@ -20,7 +20,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-00BBF9?style=for-the-badge&logo=open-source-initiative&logoColor=white" alt="License: MIT" /></a>
   <a href="https://ratatui.rs/"><img src="https://img.shields.io/badge/UI-Ratatui_TUI-4361EE?style=for-the-badge&logo=gnometerminal&logoColor=white" alt="TUI: Ratatui" /></a>
   <a href="https://github.com/nereuslabs/nereus/actions/workflows/ci.yml"><img src="https://github.com/nereuslabs/nereus/actions/workflows/ci.yml/badge.svg?branch=develop" alt="CI Status" /></a>
-  <a href="https://github.com/nereuslabs/nereus/releases"><img src="https://img.shields.io/badge/Version-0.2.0--alpha-FF0055?style=for-the-badge" alt="Version 0.2.0-alpha" /></a>
+  <a href="https://github.com/nereuslabs/nereus/releases"><img src="https://img.shields.io/badge/Version-0.2.0-FF0055?style=for-the-badge" alt="Version 0.2.0" /></a>
 </p>
 
 <!-- Quick Navigation -->
@@ -183,10 +183,16 @@ cargo run -p nereus-cli -- --skill "Rust" --level "intermediate"
 ```
 
 <details>
-<summary><strong>⚙️ CLI Options & Flags</strong></summary>
+<summary><strong>⚙️ CLI Options & Subcommands</strong></summary>
 
 ```text
-Usage: nereus [OPTIONS]
+Usage: nereus [OPTIONS] [COMMAND]
+
+Commands:
+  resume    Resume a learning session (latest or specified by ID)
+  sessions  Explore, view history, export, or manage stored sessions
+  bench     Run the Socratic mentor benchmark suite against compiler errors
+  help      Print this message or the help of the given subcommand(s)
 
 Options:
   -s, --skill <SKILL>          Target programming language or framework [default: Rust]
@@ -194,22 +200,34 @@ Options:
   -g, --goal <GOAL>            Primary learning objective
       --diagnostic             Force diagnostic quiz before roadmap generation
       --offline                Run in deterministic offline mode (Stub LLM)
+      --demo                   Run automated non-interactive lifecycle simulation
       --session-id <UUID>      Resume a previously saved learning session
-      --db <PATH>              Custom path to SQLite session database [default: ~/.nereus/nereus.db]
+      --db <PATH>              Custom path to SQLite database [default: ~/.nereus/nereus.db]
   -h, --help                   Print help information
   -V, --version                Print version information
+
+Subcommand Examples:
+  nereus resume                                    # Resume most recent session
+  nereus sessions list                             # List past learning sessions
+  nereus sessions history <SESSION_ID>             # Show chronological assessment log
+  nereus sessions export <SESSION_ID> --format svg # Export visual vector SVG badge
+  nereus bench --offline --format markdown         # Run hermetic Socratic benchmark
 ```
 </details>
 
 ---
 
-## ✨ Features
+## ✨ Key Capabilities
 
-- [x] **Sub-millisecond Cold Starts**: Written in Rust; launches instantly with negligible memory footprint (~15MB RAM).
-- [x] **Algebraic State Engine**: Complete reliability with state transitions modeled via exhaustive Rust enums.
-- [x] **Hermetic Testing**: Over 100+ unit and integration tests run in milliseconds without network access.
-- [x] **Multi-Provider LLM Client**: Built-in support for OpenRouter, Anthropic Claude, Ollama, and deterministic stub.
-- [x] **Persistent Session Storage**: SQLite backend stores progress, weak spots, and submission history across restarts.
+- [x] **Sub-millisecond Cold Starts**: Engineered in 100% idiomatic Rust; launches in <4ms with ~15MB RAM footprint.
+- [x] **Algebraic State Automaton**: Exhaustive compile-time state transitions (`enum LearningState`) preventing runtime drift.
+- [x] **Interactive Split-Pane Cockpit**: Ratatui TUI with live code editor, syntax highlighting, rotating Socratic Lighthouse, and diagnostic quiz widget.
+- [x] **Runtime Provider Hot-Switching**: In-cockpit modal (`Ctrl+P`, `F2`) to hot-swap LLMs (`OpenRouter`, `Anthropic`, `Stub`) and sandboxes (`Wasmtime`, `Host`, `Mock`).
+- [x] **Spaced Repetition Decay Engine**: Mathematical Ebbinghaus retention model ($R(t) = 2^{-t/S}$) with automated prerequisite micro-drills.
+- [x] **Socratic Benchmark Suite**: Standardized 10-problem compiler error suite with solution leakage detection regexes (`nereus bench`).
+- [x] **Multi-Format Session Export**: Export learning sessions to standalone Markdown, Asciinema v2 (`.cast`) terminal stream, and dark-mode vector SVG badges.
+- [x] **Hermetic Offline Testing**: 130+ unit, integration, and E2E verification tests run offline with zero token expenditure.
+- [x] **Multi-Channel Distribution**: Install via Homebrew tap (`brew install nereuslabs/tap/nereus`), `npx nereus-cli`, or direct shell installer.
 
 ---
 
@@ -224,9 +242,10 @@ Options:
 - [x] **Phase 5**: WebAssembly (WASM) in-memory code execution sandbox via `wasmtime` (`nereus-sandbox`).
 - [x] **Phase 6**: SQLite WAL session persistence & declarative schema migrations (`nereus-storage`).
 - [x] **Phase CI**: Automated GitHub Actions CI/CD Quality Gates (`cargo fmt`, `clippy -D warnings`, test suites).
-- [ ] **Phase MVP**: Interactive full-screen terminal event loop, diagnostic quiz widget, and bundled Rust curriculum.
-- [ ] **Phase 7**: Dynamic shared library (`.dylib` / `.so`) Tier-2 hot-reloading host.
-- [ ] **Phase 8**: Single-binary packaging & Homebrew tap distribution.
+- [x] **Phase MVP**: Interactive full-screen terminal event loop, diagnostic quiz widget, and bundled Rust curriculum.
+- [x] **Phase 8**: Single-binary packaging, npm wrapper, and Homebrew tap distribution.
+- [ ] **Phase 2.1**: Dynamic shared library (`.dylib` / `.so`) Tier-2 hot-reloading host (`nereus-plugin`).
+- [ ] **Phase 2.2**: WebAssembly Component Model Plugin Host (`nereus-plugin`).
 
 ---
 

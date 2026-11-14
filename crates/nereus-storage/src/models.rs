@@ -162,4 +162,11 @@ pub trait SessionStore: StorageBackend {
 
     /// Lists all tracked concept mastery records ordered chronologically.
     async fn list_all_concept_mastery(&self) -> CoreResult<Vec<ConceptMastery>>;
+
+    /// Full-text search across topic assessment feedbacks and notes.
+    async fn search_assessments_fts(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> CoreResult<Vec<AssessmentRecord>>;
 }

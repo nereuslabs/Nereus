@@ -258,6 +258,20 @@ fn test_sqlite_migration_engine_step_by_step() {
         .unwrap();
     assert_eq!(log_count_v2, 1);
 
+    // Migrate to v3 (creates concept_mastery)
+    let v3 = SqliteStorage::migrate_to(&mut conn, 3).unwrap();
+    assert_eq!(v3, 3);
+    assert_eq!(SqliteStorage::get_schema_version(&conn).unwrap(), 3);
+
+    let mastery_count_v3: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='concept_mastery'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(mastery_count_v3, 1);
+
     // Applying migrations again is idempotent
     let idempotent_v = SqliteStorage::apply_migrations(&mut conn).unwrap();
     assert_eq!(idempotent_v, CURRENT_SCHEMA_VERSION);
@@ -551,5 +565,65 @@ async fn test_session_store_trait_polymorphism() {
 
         store.delete_session(sid).await.unwrap();
         assert_eq!(store.list_sessions().await.unwrap().len(), 0);
+    }
+}
+
+#[tokio::test]
+async fn test_concept_mastery_persistence_and_querying() {
+    use nereus_storage::ConceptMastery;
+
+    let memory_store: Arc<dyn SessionStore> = Arc::new(MemoryStorage::new());
+    let sqlite_store: Arc<dyn SessionStore> = Arc::new(SqliteStorage::in_memory().unwrap());
+
+    for store in &[memory_store, sqlite_store] {
+        // 1. Initial list is empty
+        assert_eq!(store.list_all_concept_mastery().await.unwrap().len(), 0);
+
+        // 2. Save first concept mastery
+        let c1 = ConceptMastery {
+            concept_id: "rust.borrow.move".to_string(),
+            score: 85.0,
+            last_reviewed_at: "2026-03-01T10:00:00Z".to_string(),
+            stability_days: 2.5,
+            review_count: 1,
+        };
+        store.save_concept_mastery(&c1).await.unwrap();
+
+        // 3. Query by id
+        let fetched = store.get_concept_mastery("rust.borrow.move").await.unwrap();
+        assert!(fetched.is_some());
+        let fetched = fetched.unwrap();
+        assert_eq!(fetched.concept_id, "rust.borrow.move");
+        assert_eq!(fetched.score, 85.0);
+        assert_eq!(fetched.stability_days, 2.5);
+
+        // 4. Update / Upsert concept mastery
+        let mut c1_updated = c1.clone();
+        c1_updated.score = 95.0;
+        c1_updated.review_count = 2;
+        c1_updated.stability_days = 5.0;
+        store.save_concept_mastery(&c1_updated).await.unwrap();
+
+        let updated_fetched = store
+            .get_concept_mastery("rust.borrow.move")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated_fetched.score, 95.0);
+        assert_eq!(updated_fetched.review_count, 2);
+        assert_eq!(updated_fetched.stability_days, 5.0);
+
+        // 5. Save second concept
+        let c2 = ConceptMastery {
+            concept_id: "rust.concurrency.send".to_string(),
+            score: 70.0,
+            last_reviewed_at: "2026-03-02T12:00:00Z".to_string(),
+            stability_days: 1.0,
+            review_count: 1,
+        };
+        store.save_concept_mastery(&c2).await.unwrap();
+
+        let all = store.list_all_concept_mastery().await.unwrap();
+        assert_eq!(all.len(), 2);
     }
 }

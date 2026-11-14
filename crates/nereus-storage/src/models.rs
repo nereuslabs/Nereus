@@ -3,6 +3,7 @@
 
 use async_trait::async_trait;
 use nereus_core::error::{CoreError, CoreResult};
+pub use nereus_core::models::ConceptMastery;
 use nereus_core::models::{Assessment, Verdict};
 use nereus_core::state::StateMachineContext;
 use nereus_core::traits::StorageBackend;
@@ -152,4 +153,13 @@ pub trait SessionStore: StorageBackend {
 
     /// Deletes a session and its associated assessment history.
     async fn delete_session(&self, session_id: Uuid) -> CoreResult<bool>;
+
+    /// Persists or updates a learner's concept mastery record for spaced repetition tracking.
+    async fn save_concept_mastery(&self, mastery: &ConceptMastery) -> CoreResult<()>;
+
+    /// Retrieves concept mastery record for a specific concept identifier.
+    async fn get_concept_mastery(&self, concept_id: &str) -> CoreResult<Option<ConceptMastery>>;
+
+    /// Lists all tracked concept mastery records ordered chronologically.
+    async fn list_all_concept_mastery(&self) -> CoreResult<Vec<ConceptMastery>>;
 }

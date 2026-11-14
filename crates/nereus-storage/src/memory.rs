@@ -10,12 +10,13 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::models::{AssessmentRecord, SessionRecord, SessionStore};
+use crate::models::{AssessmentRecord, ConceptMastery, SessionRecord, SessionStore};
 
 #[derive(Debug, Default)]
 struct MemoryStorageInner {
     sessions: HashMap<Uuid, SessionRecord>,
     assessments: HashMap<Uuid, Vec<AssessmentRecord>>,
+    concept_mastery: HashMap<String, ConceptMastery>,
 }
 
 /// Thread-safe in-memory storage backend tracking sessions and assessment logs.
@@ -131,6 +132,33 @@ impl MemoryStorage {
         let mut guard = self.inner.write().await;
         guard.sessions.clear();
         guard.assessments.clear();
+        guard.concept_mastery.clear();
+    }
+
+    /// Persists or updates a concept mastery record in-memory.
+    pub async fn save_concept_mastery(&self, mastery: &ConceptMastery) -> CoreResult<()> {
+        let mut inner = self.inner.write().await;
+        inner
+            .concept_mastery
+            .insert(mastery.concept_id.clone(), mastery.clone());
+        Ok(())
+    }
+
+    /// Retrieves concept mastery record for a specific concept identifier.
+    pub async fn get_concept_mastery(
+        &self,
+        concept_id: &str,
+    ) -> CoreResult<Option<ConceptMastery>> {
+        let inner = self.inner.read().await;
+        Ok(inner.concept_mastery.get(concept_id).cloned())
+    }
+
+    /// Lists all tracked concept mastery records.
+    pub async fn list_all_concept_mastery(&self) -> CoreResult<Vec<ConceptMastery>> {
+        let inner = self.inner.read().await;
+        let mut list: Vec<ConceptMastery> = inner.concept_mastery.values().cloned().collect();
+        list.sort_by(|a, b| a.last_reviewed_at.cmp(&b.last_reviewed_at));
+        Ok(list)
     }
 }
 
@@ -175,5 +203,17 @@ impl SessionStore for MemoryStorage {
 
     async fn delete_session(&self, session_id: Uuid) -> CoreResult<bool> {
         self.delete_session(session_id).await
+    }
+
+    async fn save_concept_mastery(&self, mastery: &ConceptMastery) -> CoreResult<()> {
+        self.save_concept_mastery(mastery).await
+    }
+
+    async fn get_concept_mastery(&self, concept_id: &str) -> CoreResult<Option<ConceptMastery>> {
+        self.get_concept_mastery(concept_id).await
+    }
+
+    async fn list_all_concept_mastery(&self) -> CoreResult<Vec<ConceptMastery>> {
+        self.list_all_concept_mastery().await
     }
 }

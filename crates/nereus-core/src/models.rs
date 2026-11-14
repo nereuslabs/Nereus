@@ -86,3 +86,29 @@ pub struct SandboxExecutionResult {
     pub stderr: String,
     pub duration_ms: u64,
 }
+
+/// Tracks learner retention and stability for a specific programming concept.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConceptMastery {
+    pub concept_id: String,
+    pub score: f64,
+    pub last_reviewed_at: String,
+    pub stability_days: f64,
+    pub review_count: i64,
+}
+
+impl ConceptMastery {
+    pub fn new(
+        concept_id: impl Into<String>,
+        initial_score: f64,
+        reviewed_at: impl Into<String>,
+    ) -> Self {
+        Self {
+            concept_id: concept_id.into(),
+            score: initial_score,
+            last_reviewed_at: reviewed_at.into(),
+            stability_days: 1.0,
+            review_count: 1,
+        }
+    }
+}

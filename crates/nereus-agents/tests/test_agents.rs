@@ -500,6 +500,28 @@ fn test_coach_schedule_calculator_exceeding_deadline_triggers_warning() {
     assert!(!schedule.milestones[0].within_deadline);
 }
 
+#[test]
+fn test_coach_roadmap_generation_with_decayed_micro_drills() {
+    let coach = CoachAgent::new();
+    let profile = UserProfile::default();
+    let weakness = WeaknessReport::default();
+
+    let drill = RoadmapTopic {
+        id: "micro-drill-borrow-move".to_string(),
+        title: "⚡ Micro-Drill: Move Semantics (Spaced Review)".to_string(),
+        description: "Decayed concept reinforcement".to_string(),
+        difficulty: 0.2,
+        prerequisites: vec![],
+        estimated_hours: 0.1,
+    };
+
+    let roadmap = coach.generate_roadmap_with_decay(&profile, &weakness, vec![drill.clone()]);
+    assert!(!roadmap.topics.is_empty());
+    // Micro-drill must be prepended as the very first topic
+    assert_eq!(roadmap.topics[0].id, "micro-drill-borrow-move");
+    assert!(roadmap.topics[0].title.contains("Micro-Drill"));
+}
+
 // ============================================================================
 // 3. TutorAgent Tests
 // ============================================================================

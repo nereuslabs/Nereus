@@ -10,10 +10,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-use crate::models::{AssessmentRecord, SessionRecord, SessionStore};
+use crate::models::{AssessmentRecord, ConceptMastery, SessionRecord, SessionStore};
 
 /// Current target schema version tracked via `PRAGMA user_version`.
-pub const CURRENT_SCHEMA_VERSION: i32 = 2;
+pub const CURRENT_SCHEMA_VERSION: i32 = 3;
 
 /// Declarative schema migration step.
 #[derive(Debug, Clone, Copy)]
@@ -57,6 +57,20 @@ pub const MIGRATIONS: &[Migration] = &[
             CREATE INDEX IF NOT EXISTS idx_assessment_session ON topic_assessment_log(session_id);
             CREATE INDEX IF NOT EXISTS idx_assessment_topic ON topic_assessment_log(topic_id);
             CREATE INDEX IF NOT EXISTS idx_assessment_timestamp ON topic_assessment_log(timestamp);
+        "#,
+    },
+    Migration {
+        version: 3,
+        description: "Create concept_mastery table for spaced repetition and decay tracking",
+        sql: r#"
+            CREATE TABLE IF NOT EXISTS concept_mastery (
+                concept_id TEXT PRIMARY KEY,
+                score REAL NOT NULL,
+                last_reviewed_at TEXT NOT NULL,
+                stability_days REAL NOT NULL,
+                review_count INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_concept_last_reviewed ON concept_mastery(last_reviewed_at);
         "#,
     },
 ];
@@ -489,6 +503,114 @@ impl SqliteStorage {
 
         Ok(rows_affected > 0)
     }
+
+    /// Persists or updates a learner's concept mastery record for spaced repetition tracking.
+    pub async fn save_concept_mastery(&self, mastery: &ConceptMastery) -> CoreResult<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CoreError::StorageError("SQLite connection lock poisoned".to_string()))?;
+
+        conn.execute(
+            r#"
+            INSERT INTO concept_mastery (concept_id, score, last_reviewed_at, stability_days, review_count)
+            VALUES (?1, ?2, ?3, ?4, ?5)
+            ON CONFLICT(concept_id) DO UPDATE SET
+                score = excluded.score,
+                last_reviewed_at = excluded.last_reviewed_at,
+                stability_days = excluded.stability_days,
+                review_count = excluded.review_count;
+            "#,
+            params![
+                mastery.concept_id,
+                mastery.score,
+                mastery.last_reviewed_at,
+                mastery.stability_days,
+                mastery.review_count,
+            ],
+        )
+        .map_err(|e| CoreError::StorageError(format!("Failed to upsert concept mastery: {e}")))?;
+
+        Ok(())
+    }
+
+    /// Retrieves concept mastery record for a specific concept identifier.
+    pub async fn get_concept_mastery(
+        &self,
+        concept_id: &str,
+    ) -> CoreResult<Option<ConceptMastery>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CoreError::StorageError("SQLite connection lock poisoned".to_string()))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT concept_id, score, last_reviewed_at, stability_days, review_count FROM concept_mastery WHERE concept_id = ?1",
+            )
+            .map_err(|e| CoreError::StorageError(e.to_string()))?;
+
+        let mut rows = stmt
+            .query(params![concept_id])
+            .map_err(|e| CoreError::StorageError(e.to_string()))?;
+
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| CoreError::StorageError(e.to_string()))?
+        {
+            Ok(Some(ConceptMastery {
+                concept_id: row
+                    .get(0)
+                    .map_err(|e| CoreError::StorageError(e.to_string()))?,
+                score: row
+                    .get(1)
+                    .map_err(|e| CoreError::StorageError(e.to_string()))?,
+                last_reviewed_at: row
+                    .get(2)
+                    .map_err(|e| CoreError::StorageError(e.to_string()))?,
+                stability_days: row
+                    .get(3)
+                    .map_err(|e| CoreError::StorageError(e.to_string()))?,
+                review_count: row
+                    .get(4)
+                    .map_err(|e| CoreError::StorageError(e.to_string()))?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Lists all tracked concept mastery records ordered chronologically.
+    pub async fn list_all_concept_mastery(&self) -> CoreResult<Vec<ConceptMastery>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CoreError::StorageError("SQLite connection lock poisoned".to_string()))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT concept_id, score, last_reviewed_at, stability_days, review_count FROM concept_mastery ORDER BY last_reviewed_at ASC",
+            )
+            .map_err(|e| CoreError::StorageError(e.to_string()))?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(ConceptMastery {
+                    concept_id: row.get(0)?,
+                    score: row.get(1)?,
+                    last_reviewed_at: row.get(2)?,
+                    stability_days: row.get(3)?,
+                    review_count: row.get(4)?,
+                })
+            })
+            .map_err(|e| CoreError::StorageError(e.to_string()))?;
+
+        let mut list = Vec::new();
+        for r in rows {
+            list.push(r.map_err(|e| CoreError::StorageError(e.to_string()))?);
+        }
+        Ok(list)
+    }
 }
 
 #[async_trait]
@@ -552,5 +674,17 @@ impl SessionStore for SqliteStorage {
 
     async fn delete_session(&self, session_id: Uuid) -> CoreResult<bool> {
         self.delete_session(session_id).await
+    }
+
+    async fn save_concept_mastery(&self, mastery: &ConceptMastery) -> CoreResult<()> {
+        self.save_concept_mastery(mastery).await
+    }
+
+    async fn get_concept_mastery(&self, concept_id: &str) -> CoreResult<Option<ConceptMastery>> {
+        self.get_concept_mastery(concept_id).await
+    }
+
+    async fn list_all_concept_mastery(&self) -> CoreResult<Vec<ConceptMastery>> {
+        self.list_all_concept_mastery().await
     }
 }

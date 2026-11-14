@@ -22,6 +22,8 @@ We adhere to the [Markdown Any Decision Record (MADR)](https://adr.github.io/mad
 | [`0010`](0010-multi-format-session-replay-and-visual-terminal-export.md) | Multi-Format Session Replay and Visual Terminal Export | **Accepted** | 2026-11-14 |
 | [`0011`](0011-embedded-local-llm-inference-with-candle-and-ollama.md) | Embedded Local LLM Inference with Candle and Ollama | **Accepted** | 2026-11-14 |
 | [`0012`](0012-tree-sitter-ast-semantic-code-analysis.md) | Tree-Sitter AST Static Analysis & Anti-Pattern Detection | **Accepted** | 2026-11-14 |
+| [`0013`](0013-wasm-component-model-curriculum-host.md) | WebAssembly Component Model Curriculum Host & Plugin Loader | **Accepted** | 2026-11-14 |
+| [`0014`](0014-pedagogical-multi-agent-ecosystem-expansion.md) | Pedagogical Multi-Agent Ecosystem: Librarian & Adversary | **Accepted** | 2026-11-14 |
 
 ---
 

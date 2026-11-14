@@ -11,7 +11,7 @@ pub mod llm;
 #[derive(Parser, Debug)]
 #[command(
     name = "nereus",
-    version = "0.2.0",
+    version = "0.3.0",
     about = "🌊 The Terminal-First AI Programming Mentor Built in Rust",
     long_about = "Nereus is an autonomous AI coding companion that diagnoses skill gaps, generates adaptive roadmaps, and provides Socratic feedback using an algebraic state automaton."
 )]

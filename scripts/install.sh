@@ -10,7 +10,7 @@
 set -e
 
 REPO="nereuslabs/nereus"
-FALLBACK_VERSION="v0.2.0"
+FALLBACK_VERSION="v0.3.0"
 DEST_DIR="${NEREUS_INSTALL_DIR:-$HOME/.local/bin}"
 
 # ANSI Colors (disabled if stdout is not a TTY)

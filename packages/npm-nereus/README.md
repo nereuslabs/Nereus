@@ -54,11 +54,11 @@ Nereus automatically detects your operating system and CPU architecture during i
 
 | Platform | Architecture | Binary Artifact | Status |
 | :--- | :--- | :--- | :--- |
-| **macOS** | Apple Silicon (`arm64`: M1/M2/M3/M4) | `nereus-v0.2.0-darwin-arm64.tar.gz` | Supported |
-| **macOS** | Intel (`x64`) | `nereus-v0.2.0-darwin-x64.tar.gz` | Supported |
-| **Linux** | Standard 64-bit (`x64`) | `nereus-v0.2.0-linux-x64.tar.gz` | Supported |
-| **Linux** | ARM64 (`aarch64` / `arm64`) | `nereus-v0.2.0-linux-arm64.tar.gz` | Supported |
-| **Windows** | 64-bit (`x64`) | `nereus-v0.2.0-win32-x64.tar.gz` | Supported |
+| **macOS** | Apple Silicon (`arm64`: M1/M2/M3/M4) | `nereus-v0.3.0-darwin-arm64.tar.gz` | Supported |
+| **macOS** | Intel (`x64`) | `nereus-v0.3.0-darwin-x64.tar.gz` | Supported |
+| **Linux** | Standard 64-bit (`x64`) | `nereus-v0.3.0-linux-x64.tar.gz` | Supported |
+| **Linux** | ARM64 (`aarch64` / `arm64`) | `nereus-v0.3.0-linux-arm64.tar.gz` | Supported |
+| **Windows** | 64-bit (`x64`) | `nereus-v0.3.0-win32-x64.tar.gz` | Supported |
 
 ---
 

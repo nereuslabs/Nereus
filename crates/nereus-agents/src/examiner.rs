@@ -222,11 +222,7 @@ impl ExaminerAgent {
             }
         }
 
-        if verdict == Verdict::Retry && !feedback.contains('?') {
-            return false;
-        }
-
-        true
+        !(verdict == Verdict::Retry && !feedback.contains('?'))
     }
 }
 

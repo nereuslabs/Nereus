@@ -97,6 +97,39 @@ impl ExaminerAgent {
         }
     }
 
+    /// Evaluates candidate source code using AST static analysis to discover educational anti-patterns.
+    pub fn inspect_code_quality(&self, code: &str) -> Vec<nereus_core::models::PedagogicalSmell> {
+        nereus_sandbox::AstInspector::inspect(code)
+    }
+
+    /// Evaluates sandbox execution output alongside pre-compilation AST analysis to deliver Socratic guidance.
+    pub fn assess_with_ast(
+        &self,
+        topic: &RoadmapTopic,
+        sandbox: &SandboxExecutionResult,
+        submission_code: &str,
+    ) -> Assessment {
+        let mut assessment = self.assess_execution(topic, sandbox);
+        let smells = self.inspect_code_quality(submission_code);
+
+        if !smells.is_empty() {
+            let mut smell_notes = Vec::new();
+            for smell in &smells {
+                smell_notes.push(format!(
+                    "Line {}: {} — Socratic Hint: {}",
+                    smell.line, smell.message, smell.socratic_hint
+                ));
+            }
+            assessment.feedback = format!(
+                "{}\n\n[Pedagogical Code Quality Observations]:\n{}",
+                assessment.feedback,
+                smell_notes.join("\n")
+            );
+        }
+
+        assessment
+    }
+
     /// Directly assess a numerical score against a topic with Socratic feedback sanitization.
     pub fn assess_score(&self, topic: &RoadmapTopic, score: f32, raw_feedback: &str) -> Assessment {
         let verdict = self.evaluate_verdict(topic, score);

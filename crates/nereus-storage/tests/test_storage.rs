@@ -627,3 +627,78 @@ async fn test_concept_mastery_persistence_and_querying() {
         assert_eq!(all.len(), 2);
     }
 }
+
+#[tokio::test]
+async fn test_sqlite_fts5_full_text_search() {
+    let storage = SqliteStorage::in_memory().unwrap();
+    let session_id = Uuid::new_v4();
+
+    // Save a base session
+    let mut ctx = StateMachineContext::new(UserProfile::default(), false);
+    ctx.session_id = session_id;
+    storage.save_session(&ctx).await.unwrap();
+
+    // Record assessments with specific compiler keywords
+    let a1 = AssessmentRecord::new(
+        session_id,
+        "borrow-checker-1",
+        85.0,
+        "pass",
+        1,
+        "Clean solution. Avoids E0502 cannot borrow as mutable because also borrowed as immutable.",
+    );
+    let a2 = AssessmentRecord::new(
+        session_id,
+        "async-futures-2",
+        50.0,
+        "retry",
+        2,
+        "Unpinned future memory violation detected. Pin<&mut Self> invariant violated.",
+    );
+
+    storage.record_assessment(&a1).await.unwrap();
+    storage.record_assessment(&a2).await.unwrap();
+
+    // 1. Search for borrow keyword
+    let results = storage.search_assessments_fts("borrow", 10).await.unwrap();
+    assert!(!results.is_empty());
+    assert_eq!(results[0].topic_id, "borrow-checker-1");
+
+    // 2. Search for pin keyword
+    let pin_results = storage.search_assessments_fts("Pin", 10).await.unwrap();
+    assert!(!pin_results.is_empty());
+    assert_eq!(pin_results[0].topic_id, "async-futures-2");
+
+    // 3. Search with non-matching term
+    let no_results = storage
+        .search_assessments_fts("nonexistent_keyword_xyz", 10)
+        .await
+        .unwrap();
+    assert!(no_results.is_empty());
+}
+
+#[tokio::test]
+async fn test_memory_storage_search_assessments() {
+    let storage = MemoryStorage::new();
+    let session_id = Uuid::new_v4();
+    let mut ctx = StateMachineContext::new(UserProfile::default(), false);
+    ctx.session_id = session_id;
+    storage.save_session(&ctx).await.unwrap();
+
+    let a = AssessmentRecord::new(
+        session_id,
+        "concurrency-topic",
+        90.0,
+        "pass",
+        1,
+        "Socratic guidance: MutexGuard lock held across await point causes Send bound violation.",
+    );
+    storage.record_assessment(&a).await.unwrap();
+
+    let results = storage
+        .search_assessments_fts("MutexGuard", 5)
+        .await
+        .unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].topic_id, "concurrency-topic");
+}

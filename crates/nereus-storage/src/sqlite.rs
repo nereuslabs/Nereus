@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::models::{AssessmentRecord, ConceptMastery, SessionRecord, SessionStore};
 
 /// Current target schema version tracked via `PRAGMA user_version`.
-pub const CURRENT_SCHEMA_VERSION: i32 = 3;
+pub const CURRENT_SCHEMA_VERSION: i32 = 4;
 
 /// Declarative schema migration step.
 #[derive(Debug, Clone, Copy)]
@@ -73,6 +73,30 @@ pub const MIGRATIONS: &[Migration] = &[
             CREATE INDEX IF NOT EXISTS idx_concept_last_reviewed ON concept_mastery(last_reviewed_at);
         "#,
     },
+    Migration {
+        version: 4,
+        description: "Create assessment_fts virtual table and triggers for full-text search",
+        sql: r#"
+            CREATE VIRTUAL TABLE IF NOT EXISTS assessment_fts USING fts5(
+                assessment_id UNINDEXED,
+                session_id UNINDEXED,
+                topic_id,
+                feedback
+            );
+
+            CREATE TRIGGER IF NOT EXISTS topic_assessment_ai AFTER INSERT ON topic_assessment_log BEGIN
+                INSERT INTO assessment_fts(assessment_id, session_id, topic_id, feedback)
+                VALUES (new.id, new.session_id, new.topic_id, new.feedback);
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS topic_assessment_ad AFTER DELETE ON topic_assessment_log BEGIN
+                DELETE FROM assessment_fts WHERE assessment_id = old.id;
+            END;
+
+            INSERT INTO assessment_fts(assessment_id, session_id, topic_id, feedback)
+            SELECT id, session_id, topic_id, feedback FROM topic_assessment_log;
+        "#,
+    },
 ];
 
 /// Production-grade SQLite storage backend with WAL mode, normalized synchronicity,
@@ -122,13 +146,11 @@ impl SqliteStorage {
 
     /// Configures connection pragmas: WAL mode, NORMAL synchronous, foreign keys, and busy timeout.
     pub fn configure_connection(conn: &Connection) -> CoreResult<()> {
-        conn.execute_batch(
-            "PRAGMA journal_mode = WAL;
-             PRAGMA synchronous = NORMAL;
-             PRAGMA foreign_keys = ON;
-             PRAGMA busy_timeout = 5000;",
-        )
-        .map_err(|e| CoreError::StorageError(format!("Failed to configure SQLite PRAGMAs: {e}")))?;
+        let _mode: Result<String, _> =
+            conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get(0));
+        let _ = conn.execute("PRAGMA synchronous = NORMAL;", []);
+        let _ = conn.execute("PRAGMA foreign_keys = ON;", []);
+        let _ = conn.execute("PRAGMA busy_timeout = 5000;", []);
 
         Ok(())
     }
@@ -143,7 +165,7 @@ impl SqliteStorage {
 
     /// Updates `PRAGMA user_version` to a target version.
     pub fn set_schema_version(conn: &Connection, version: i32) -> CoreResult<()> {
-        conn.execute(&format!("PRAGMA user_version = {version};"), [])
+        conn.pragma_update(None, "user_version", version)
             .map_err(|e| {
                 CoreError::StorageError(format!(
                     "Failed to set PRAGMA user_version to {version}: {e}"
@@ -519,7 +541,7 @@ impl SqliteStorage {
                 score = excluded.score,
                 last_reviewed_at = excluded.last_reviewed_at,
                 stability_days = excluded.stability_days,
-                review_count = excluded.review_count;
+                review_count = excluded.review_count
             "#,
             params![
                 mastery.concept_id,
@@ -611,6 +633,101 @@ impl SqliteStorage {
         }
         Ok(list)
     }
+
+    /// Full-text search across topic assessments using SQLite FTS5 index with fallback.
+    pub async fn search_assessments_fts(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> CoreResult<Vec<AssessmentRecord>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CoreError::StorageError("SQLite connection lock poisoned".to_string()))?;
+
+        let sanitized = query.trim();
+        if sanitized.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // FTS5 MATCH query with rank ordering
+        let fts_query = if sanitized.contains('"') {
+            sanitized.to_string()
+        } else {
+            format!("\"{}\"", sanitized)
+        };
+
+        let sql = r#"
+            SELECT t.id, t.session_id, t.topic_id, t.score, t.verdict, t.attempts, t.feedback, t.timestamp
+            FROM topic_assessment_log t
+            JOIN assessment_fts f ON t.id = f.assessment_id
+            WHERE assessment_fts MATCH ?1
+            ORDER BY rank
+            LIMIT ?2
+        "#;
+
+        let res = conn.prepare(sql).and_then(|mut stmt| {
+            let rows = stmt.query_map(params![fts_query, limit as i64], |row| {
+                let sid_str: String = row.get(1)?;
+                let session_id = Uuid::parse_str(&sid_str).unwrap_or_default();
+                Ok(AssessmentRecord::with_id(
+                    row.get::<_, String>(0)?,
+                    session_id,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, f64>(3)? as f32,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, i64>(5)? as usize,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
+                ))
+            })?;
+            let mut records = Vec::new();
+            for r in rows {
+                records.push(r?);
+            }
+            Ok(records)
+        });
+
+        match res {
+            Ok(records) if !records.is_empty() => Ok(records),
+            _ => {
+                // Fallback to substring query via LIKE
+                let pattern = format!("%{sanitized}%");
+                let fallback_sql = r#"
+                    SELECT id, session_id, topic_id, score, verdict, attempts, feedback, timestamp
+                    FROM topic_assessment_log
+                    WHERE feedback LIKE ?1 OR topic_id LIKE ?1
+                    ORDER BY timestamp DESC
+                    LIMIT ?2
+                "#;
+                let mut fallback_stmt = conn
+                    .prepare(fallback_sql)
+                    .map_err(|e| CoreError::StorageError(e.to_string()))?;
+                let rows = fallback_stmt
+                    .query_map(params![pattern, limit as i64], |row| {
+                        let sid_str: String = row.get(1)?;
+                        let session_id = Uuid::parse_str(&sid_str).unwrap_or_default();
+                        Ok(AssessmentRecord::with_id(
+                            row.get::<_, String>(0)?,
+                            session_id,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, f64>(3)? as f32,
+                            row.get::<_, String>(4)?,
+                            row.get::<_, i64>(5)? as usize,
+                            row.get::<_, String>(6)?,
+                            row.get::<_, String>(7)?,
+                        ))
+                    })
+                    .map_err(|e| CoreError::StorageError(e.to_string()))?;
+
+                let mut records = Vec::new();
+                for r in rows {
+                    records.push(r.map_err(|e| CoreError::StorageError(e.to_string()))?);
+                }
+                Ok(records)
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -686,5 +803,13 @@ impl SessionStore for SqliteStorage {
 
     async fn list_all_concept_mastery(&self) -> CoreResult<Vec<ConceptMastery>> {
         self.list_all_concept_mastery().await
+    }
+
+    async fn search_assessments_fts(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> CoreResult<Vec<AssessmentRecord>> {
+        self.search_assessments_fts(query, limit).await
     }
 }

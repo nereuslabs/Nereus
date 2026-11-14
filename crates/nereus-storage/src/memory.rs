@@ -160,6 +160,36 @@ impl MemoryStorage {
         list.sort_by(|a, b| a.last_reviewed_at.cmp(&b.last_reviewed_at));
         Ok(list)
     }
+
+    /// Full-text / substring search across all assessment records in memory.
+    pub async fn search_assessments_fts(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> CoreResult<Vec<AssessmentRecord>> {
+        let q = query.trim().to_lowercase();
+        if q.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let guard = self.inner.read().await;
+        let mut matches = Vec::new();
+
+        for assessments in guard.assessments.values() {
+            for record in assessments {
+                if record.feedback.to_lowercase().contains(&q)
+                    || record.topic_id.to_lowercase().contains(&q)
+                    || record.verdict.to_lowercase().contains(&q)
+                {
+                    matches.push(record.clone());
+                }
+            }
+        }
+
+        matches.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        matches.truncate(limit);
+        Ok(matches)
+    }
 }
 
 #[async_trait]
@@ -215,5 +245,13 @@ impl SessionStore for MemoryStorage {
 
     async fn list_all_concept_mastery(&self) -> CoreResult<Vec<ConceptMastery>> {
         self.list_all_concept_mastery().await
+    }
+
+    async fn search_assessments_fts(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> CoreResult<Vec<AssessmentRecord>> {
+        self.search_assessments_fts(query, limit).await
     }
 }

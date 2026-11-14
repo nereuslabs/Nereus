@@ -67,6 +67,47 @@ pub enum Commands {
 
     /// Run the automated Socratic Mentor LLM Benchmark Suite
     Bench(BenchArgs),
+
+    /// Search historical topic assessments and feedback using full-text search
+    Search(SearchArgs),
+
+    /// Synchronize learning journals and assessment logs with a local or remote Git repository
+    Sync(SyncArgs),
+}
+
+/// Arguments for `nereus search`.
+#[derive(clap::Args, Debug, Clone, PartialEq, Eq)]
+pub struct SearchArgs {
+    /// Search query or compiler error code
+    pub query: String,
+
+    /// Maximum number of matching assessment entries to display [default: 10]
+    #[arg(short, long, default_value_t = 10)]
+    pub limit: usize,
+}
+
+/// Arguments for `nereus sync`.
+#[derive(clap::Args, Debug, Clone, PartialEq, Eq)]
+pub struct SyncArgs {
+    /// Target directory for Git learning journal [default: ~/.nereus/journal]
+    #[arg(short, long)]
+    pub path: Option<String>,
+
+    /// Git remote URL to push commits to (optional)
+    #[arg(short, long)]
+    pub remote: Option<String>,
+
+    /// Custom commit message for journal updates [default: "chore(sync): update Nereus learning journal"]
+    #[arg(
+        short,
+        long,
+        default_value = "chore(sync): update Nereus learning journal"
+    )]
+    pub message: String,
+
+    /// Dry run: render and display journal files without committing or pushing
+    #[arg(long, default_value_t = false)]
+    pub dry_run: bool,
 }
 
 /// Arguments for `nereus bench`.
@@ -240,6 +281,40 @@ mod tests {
                 session_id: Uuid::parse_str(id_str).unwrap(),
                 format: "cast".to_string(),
                 output: Some("/tmp/out.cast".to_string()),
+            }))
+        );
+    }
+
+    #[test]
+    fn test_search_subcommand_args() {
+        let cli = Cli::parse_from(["nereus", "search", "borrow checker", "--limit", "5"]);
+        assert_eq!(
+            cli.command,
+            Some(Commands::Search(SearchArgs {
+                query: "borrow checker".to_string(),
+                limit: 5,
+            }))
+        );
+    }
+
+    #[test]
+    fn test_sync_subcommand_args() {
+        let cli = Cli::parse_from([
+            "nereus",
+            "sync",
+            "--path",
+            "/tmp/journal",
+            "--message",
+            "feat: sync notes",
+            "--dry-run",
+        ]);
+        assert_eq!(
+            cli.command,
+            Some(Commands::Sync(SyncArgs {
+                path: Some("/tmp/journal".to_string()),
+                remote: None,
+                message: "feat: sync notes".to_string(),
+                dry_run: true,
             }))
         );
     }

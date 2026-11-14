@@ -3,8 +3,8 @@
 
 use chrono::Utc;
 use nereus_agents::{
-    CoachAgent, CoachError, DiagnosticAgent, ExaminerAgent, QuestionCategory, SeverityLevel,
-    TutorAgent, COMPILER_GUIDES,
+    AdversaryAgent, AdversaryCategory, CoachAgent, CoachError, DiagnosticAgent, DocCategory,
+    ExaminerAgent, LibrarianAgent, QuestionCategory, SeverityLevel, TutorAgent, COMPILER_GUIDES,
 };
 use nereus_core::models::{
     Roadmap, RoadmapTopic, SandboxExecutionResult, UserLevel, UserProfile, Verdict, WeaknessReport,
@@ -817,4 +817,122 @@ fn test_multi_agent_pedagogical_pipeline() {
     assert!(revision_material.contains("E0597"));
     assert!(revision_material.contains("Anti-Pattern"));
     assert!(revision_task.contains("E0597"));
+}
+
+#[test]
+fn test_examiner_assess_with_ast_antipattern_detection() {
+    let examiner = ExaminerAgent::new();
+    let topic = RoadmapTopic {
+        id: "topic-1".to_string(),
+        title: "Ownership & Borrowing".to_string(),
+        description: "Ownership and move semantics".to_string(),
+        difficulty: 0.5,
+        estimated_hours: 2.0,
+        prerequisites: vec![],
+    };
+
+    let passing_sandbox = SandboxExecutionResult {
+        success: true,
+        exit_code: 0,
+        stdout: "test result: ok.".to_string(),
+        stderr: "".to_string(),
+        duration_ms: 120,
+    };
+
+    let smelly_code = r#"
+        pub fn solve(data: String) -> String {
+            let copy = data.clone();
+            copy
+        }
+    "#;
+
+    let assessment = examiner.assess_with_ast(&topic, &passing_sandbox, smelly_code);
+    assert_eq!(assessment.verdict, Verdict::Pass);
+    assert!(assessment
+        .feedback
+        .contains("Pedagogical Code Quality Observations"));
+    assert!(
+        assessment.feedback.contains("CLONE_USAGE") || assessment.feedback.contains(".clone()")
+    );
+}
+
+// ============================================================================
+// 6. LibrarianAgent & AdversaryAgent Tests (Phase 2)
+// ============================================================================
+
+#[test]
+fn test_librarian_agent_lookup_and_search() {
+    let librarian = LibrarianAgent::new();
+
+    // Direct symbol lookup
+    let arc_doc = librarian
+        .lookup_symbol("std::sync::Arc")
+        .expect("Should find Arc");
+    assert_eq!(arc_doc.category, DocCategory::StdSync);
+    assert!(arc_doc.summary.contains("reference-counting"));
+
+    // Nomicon entry lookup
+    let nomicon_doc = librarian
+        .lookup_symbol("nomicon::subtyping")
+        .expect("Should find nomicon subtyping");
+    assert_eq!(nomicon_doc.category, DocCategory::Nomicon);
+
+    // Compiler error citation
+    let e0382 = librarian
+        .cite_for_error("E0382")
+        .expect("Should find E0382");
+    assert_eq!(e0382.category, DocCategory::CompilerError);
+    assert!(e0382.title.contains("moved value"));
+
+    // Multi-term search
+    let results = librarian.search("interior mutability borrow", 2);
+    assert!(!results.is_empty());
+    assert_eq!(results[0].category, DocCategory::StdCell);
+
+    // Socratic question answering
+    let inquiry = librarian.ask("How does RwLock differ from Mutex?");
+    assert!(inquiry.primary_doc.is_some());
+    assert!(inquiry.socratic_note.contains("invariants"));
+}
+
+#[test]
+fn test_adversary_agent_boundary_and_concurrency_fuzzing() {
+    let adversary = AdversaryAgent::new();
+
+    // Concurrency test case synthesis
+    let concurrent_code = r#"
+        use std::sync::Mutex;
+        pub struct SafeAccumulator(Mutex<u64>);
+    "#;
+    let report = adversary.generate_pathological_tests("concurrency", concurrent_code);
+
+    assert_eq!(report.topic_id, "concurrency");
+    assert!(report
+        .test_cases
+        .iter()
+        .any(|tc| tc.category == AdversaryCategory::ConcurrencyStress));
+    assert!(report
+        .test_cases
+        .iter()
+        .any(|tc| tc.category == AdversaryCategory::BoundaryCondition));
+    assert!(report
+        .test_cases
+        .iter()
+        .any(|tc| tc.category == AdversaryCategory::ArithmeticOverflow));
+    assert!(report.socratic_warning.contains("pathological boundaries"));
+    assert!(!report.defensive_principles.is_empty());
+
+    // Memory safety test case synthesis for unsafe blocks
+    let unsafe_code = r#"
+        pub unsafe fn swap_ptrs(a: *mut i32, b: *mut i32) {
+            let tmp = *a;
+            *a = *b;
+            *b = tmp;
+        }
+    "#;
+    let unsafe_report = adversary.generate_pathological_tests("unsafe-pointers", unsafe_code);
+    assert!(unsafe_report
+        .test_cases
+        .iter()
+        .any(|tc| tc.category == AdversaryCategory::MemorySafety));
 }

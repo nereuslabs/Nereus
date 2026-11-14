@@ -1,6 +1,6 @@
 {
   "name": "@nereuslabs/nereus",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "The Terminal-First AI Programming Mentor Built in Rust",
   "license": "MIT",
   "author": "Nereus Labs <support@nereuslabs.com>",

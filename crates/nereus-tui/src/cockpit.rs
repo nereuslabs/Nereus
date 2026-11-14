@@ -290,6 +290,17 @@ impl CockpitApp {
 
         // Editor pane specific interactive character editing and cursor movements
         if self.focused_pane == FocusedPane::Editor {
+            // If in-buffer search modal is open, handle search navigation
+            if self.editor_state.is_search_open {
+                if key.code == KeyCode::Esc {
+                    self.editor_state.close_search();
+                    return AppAction::None;
+                }
+                if self.editor_state.handle_key(key) {
+                    return AppAction::None;
+                }
+            }
+
             // Direct submission shortcut from editor
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Enter {
                 let submission = self.submit_code();
@@ -300,6 +311,29 @@ impl CockpitApp {
                     *sub = Some(submission.clone());
                 }
                 return AppAction::Submit(submission);
+            }
+
+            // Undo / Redo / Search shortcuts with CONTROL
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                match key.code {
+                    KeyCode::Char('z') | KeyCode::Char('Z') => {
+                        if self.editor_state.undo() {
+                            return AppAction::BufferModified;
+                        }
+                        return AppAction::None;
+                    }
+                    KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        if self.editor_state.redo() {
+                            return AppAction::BufferModified;
+                        }
+                        return AppAction::None;
+                    }
+                    KeyCode::Char('f') | KeyCode::Char('F') => {
+                        self.editor_state.open_search();
+                        return AppAction::None;
+                    }
+                    _ => {}
+                }
             }
 
             // Universal exit with Esc
@@ -411,6 +445,54 @@ impl CockpitApp {
         }
 
         AppAction::None
+    }
+
+    /// Dispatches mouse events (left click to focus, mousewheel to scroll).
+    pub fn handle_mouse(
+        &mut self,
+        mouse: crossterm::event::MouseEvent,
+        layout: &crate::layout::CockpitPanes,
+    ) -> AppAction {
+        use crossterm::event::{MouseButton, MouseEventKind};
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                let col = mouse.column;
+                let row = mouse.row;
+                let in_rect = |r: ratatui::layout::Rect| -> bool {
+                    col >= r.x && col < r.x + r.width && row >= r.y && row < r.y + r.height
+                };
+
+                if in_rect(layout.roadmap) {
+                    self.focused_pane = FocusedPane::Roadmap;
+                    return AppAction::FocusChanged(FocusedPane::Roadmap);
+                } else if in_rect(layout.task) {
+                    self.focused_pane = FocusedPane::Task;
+                    return AppAction::FocusChanged(FocusedPane::Task);
+                } else if in_rect(layout.code_editor) {
+                    self.focused_pane = FocusedPane::Editor;
+                    return AppAction::FocusChanged(FocusedPane::Editor);
+                } else if in_rect(layout.socratic_guidance) {
+                    self.focused_pane = FocusedPane::Guidance;
+                    return AppAction::FocusChanged(FocusedPane::Guidance);
+                }
+                AppAction::None
+            }
+            MouseEventKind::ScrollUp => {
+                self.scroll_up();
+                AppAction::Scrolled {
+                    pane: self.focused_pane,
+                    delta: -1,
+                }
+            }
+            MouseEventKind::ScrollDown => {
+                self.scroll_down();
+                AppAction::Scrolled {
+                    pane: self.focused_pane,
+                    delta: 1,
+                }
+            }
+            _ => AppAction::None,
+        }
     }
 
     /// Dispatches an `AppEvent` into state mutations and action responses.

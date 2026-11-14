@@ -18,6 +18,9 @@ pub fn solve() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }"#;
 
+/// Maximum snapshots kept in the undo/redo ring.
+pub const MAX_UNDO_HISTORY: usize = 64;
+
 /// Reactive state tracking buffer lines, cursor position, and viewport scroll offsets.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorState {
@@ -28,6 +31,12 @@ pub struct EditorState {
     pub horizontal_offset: usize,
     pub is_focused: bool,
     pub is_modified: bool,
+    pub undo_stack: Vec<(Vec<String>, usize, usize)>,
+    pub redo_stack: Vec<(Vec<String>, usize, usize)>,
+    pub is_search_open: bool,
+    pub search_query: String,
+    pub search_matches: Vec<(usize, usize)>,
+    pub current_match_index: usize,
 }
 
 impl Default for EditorState {
@@ -54,7 +63,123 @@ impl EditorState {
             horizontal_offset: 0,
             is_focused: false,
             is_modified: false,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            is_search_open: false,
+            search_query: String::new(),
+            search_matches: Vec::new(),
+            current_match_index: 0,
         }
+    }
+
+    /// Saves a snapshot of current buffer content and cursor before mutation.
+    pub fn save_snapshot(&mut self) {
+        if self.undo_stack.len() >= MAX_UNDO_HISTORY {
+            self.undo_stack.remove(0);
+        }
+        self.undo_stack
+            .push((self.lines.clone(), self.cursor_line, self.cursor_col));
+        self.redo_stack.clear();
+    }
+
+    /// Reverts the buffer to the previous historical snapshot.
+    pub fn undo(&mut self) -> bool {
+        if let Some((prev_lines, prev_line, prev_col)) = self.undo_stack.pop() {
+            if self.redo_stack.len() >= MAX_UNDO_HISTORY {
+                self.redo_stack.remove(0);
+            }
+            self.redo_stack
+                .push((self.lines.clone(), self.cursor_line, self.cursor_col));
+            self.lines = prev_lines;
+            self.cursor_line = prev_line.min(self.lines.len().saturating_sub(1));
+            self.cursor_col = prev_col.min(self.lines.get(self.cursor_line).map_or(0, |l| l.len()));
+            self.is_modified = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Re-applies a previously undone mutation snapshot.
+    pub fn redo(&mut self) -> bool {
+        if let Some((next_lines, next_line, next_col)) = self.redo_stack.pop() {
+            if self.undo_stack.len() >= MAX_UNDO_HISTORY {
+                self.undo_stack.remove(0);
+            }
+            self.undo_stack
+                .push((self.lines.clone(), self.cursor_line, self.cursor_col));
+            self.lines = next_lines;
+            self.cursor_line = next_line.min(self.lines.len().saturating_sub(1));
+            self.cursor_col = next_col.min(self.lines.get(self.cursor_line).map_or(0, |l| l.len()));
+            self.is_modified = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Opens in-buffer search modal.
+    pub fn open_search(&mut self) {
+        self.is_search_open = true;
+        self.update_search_matches();
+    }
+
+    /// Closes in-buffer search modal.
+    pub fn close_search(&mut self) {
+        self.is_search_open = false;
+        self.search_query.clear();
+        self.search_matches.clear();
+        self.current_match_index = 0;
+    }
+
+    /// Re-evaluates all occurrences of `search_query` across all lines.
+    pub fn update_search_matches(&mut self) {
+        self.search_matches.clear();
+        if self.search_query.is_empty() {
+            return;
+        }
+
+        let q = self.search_query.to_lowercase();
+        for (line_idx, line) in self.lines.iter().enumerate() {
+            let lower = line.to_lowercase();
+            let mut start = 0;
+            while let Some(pos) = lower[start..].find(&q) {
+                let col = start + pos;
+                self.search_matches.push((line_idx, col));
+                start = col + q.len().max(1);
+            }
+        }
+
+        if !self.search_matches.is_empty() && self.current_match_index >= self.search_matches.len()
+        {
+            self.current_match_index = 0;
+        }
+    }
+
+    /// Jumps cursor to the next match.
+    pub fn next_search_match(&mut self) {
+        if self.search_matches.is_empty() {
+            return;
+        }
+        self.current_match_index = (self.current_match_index + 1) % self.search_matches.len();
+        let (l, c) = self.search_matches[self.current_match_index];
+        self.cursor_line = l;
+        self.cursor_col = c;
+    }
+
+    /// Jumps cursor to the previous match.
+    pub fn prev_search_match(&mut self) {
+        if self.search_matches.is_empty() {
+            return;
+        }
+        if self.current_match_index == 0 {
+            self.current_match_index = self.search_matches.len() - 1;
+        } else {
+            self.current_match_index -= 1;
+        }
+        let (l, c) = self.search_matches[self.current_match_index];
+        self.cursor_line = l;
+        self.cursor_col = c;
     }
 
     /// Retrieves the complete content of the editor as a single string.
@@ -75,10 +200,13 @@ impl EditorState {
         self.scroll_offset = 0;
         self.horizontal_offset = 0;
         self.is_modified = false;
+        self.undo_stack.clear();
+        self.redo_stack.clear();
     }
 
     /// Clears the editor text.
     pub fn clear(&mut self) {
+        self.save_snapshot();
         self.lines = vec![String::new()];
         self.cursor_line = 0;
         self.cursor_col = 0;
@@ -89,6 +217,7 @@ impl EditorState {
 
     /// Inserts a character at the current cursor position.
     pub fn insert_char(&mut self, c: char) {
+        self.save_snapshot();
         if self.cursor_line >= self.lines.len() {
             self.lines.push(String::new());
             self.cursor_line = self.lines.len() - 1;
@@ -104,8 +233,9 @@ impl EditorState {
         self.is_modified = true;
     }
 
-    /// Inserts a newline at the current cursor position, splitting the active line.
+    /// Inserts a newline at the current cursor position with smart auto-indentation.
     pub fn insert_newline(&mut self) {
+        self.save_snapshot();
         if self.cursor_line >= self.lines.len() {
             self.lines.push(String::new());
             self.cursor_line = self.lines.len() - 1;
@@ -114,17 +244,37 @@ impl EditorState {
         let current_line = &self.lines[self.cursor_line];
         let col = self.cursor_col.min(current_line.len());
 
+        // Extract leading whitespace for indentation preservation
+        let leading_spaces: String = current_line
+            .chars()
+            .take_while(|c| c.is_whitespace() && *c != '\n')
+            .collect();
+
+        let trimmed_before_cursor = current_line[..col].trim_end();
+        let extra_indent = if trimmed_before_cursor.ends_with('{')
+            || trimmed_before_cursor.ends_with('(')
+            || trimmed_before_cursor.ends_with('[')
+        {
+            "    "
+        } else {
+            ""
+        };
+
+        let new_indent = format!("{}{}", leading_spaces, extra_indent);
         let remainder = current_line[col..].to_string();
+
         self.lines[self.cursor_line].truncate(col);
-        self.lines.insert(self.cursor_line + 1, remainder);
+        let new_line = format!("{}{}", new_indent, remainder);
+        self.lines.insert(self.cursor_line + 1, new_line);
 
         self.cursor_line += 1;
-        self.cursor_col = 0;
+        self.cursor_col = new_indent.len();
         self.is_modified = true;
     }
 
     /// Deletes the character directly preceding the cursor (Backspace).
     pub fn delete_backspace(&mut self) {
+        self.save_snapshot();
         if self.cursor_col > 0 {
             if let Some(line) = self.lines.get_mut(self.cursor_line) {
                 if self.cursor_col <= line.len() {
@@ -147,6 +297,7 @@ impl EditorState {
 
     /// Deletes the character at the current cursor position (Delete key).
     pub fn delete_char(&mut self) {
+        self.save_snapshot();
         if self.cursor_line < self.lines.len() {
             let line_len = self.lines[self.cursor_line].len();
             if self.cursor_col < line_len {
@@ -264,6 +415,67 @@ impl EditorState {
     ///
     /// Returns `true` if the event was handled and mutated state.
     pub fn handle_key(&mut self, key: KeyEvent) -> bool {
+        // If search modal is active, intercept search input
+        if self.is_search_open {
+            match key.code {
+                KeyCode::Esc => {
+                    self.close_search();
+                    return true;
+                }
+                KeyCode::Enter => {
+                    self.next_search_match();
+                    return true;
+                }
+                KeyCode::Up => {
+                    self.prev_search_match();
+                    return true;
+                }
+                KeyCode::Down => {
+                    self.next_search_match();
+                    return true;
+                }
+                KeyCode::Backspace => {
+                    self.search_query.pop();
+                    self.update_search_matches();
+                    if let Some(&(l, c)) = self.search_matches.first() {
+                        self.cursor_line = l;
+                        self.cursor_col = c;
+                    }
+                    return true;
+                }
+                KeyCode::Char(c)
+                    if !key.modifiers.contains(KeyModifiers::CONTROL)
+                        && !key.modifiers.contains(KeyModifiers::ALT) =>
+                {
+                    self.search_query.push(c);
+                    self.update_search_matches();
+                    if let Some(&(l, c)) = self.search_matches.first() {
+                        self.cursor_line = l;
+                        self.cursor_col = c;
+                    }
+                    return true;
+                }
+                _ => return false,
+            }
+        }
+
+        // Global shortcuts with CONTROL
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            match key.code {
+                KeyCode::Char('z') | KeyCode::Char('Z') => {
+                    return self.undo();
+                }
+                KeyCode::Char('y') | KeyCode::Char('Y') => {
+                    return self.redo();
+                }
+                KeyCode::Char('f') | KeyCode::Char('F') => {
+                    self.open_search();
+                    return true;
+                }
+                _ => {}
+            }
+        }
+
         match key.code {
             KeyCode::Char(c)
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
@@ -385,7 +597,13 @@ impl<'a> StatefulWidget for EditorWidget<'a> {
             0
         };
 
-        let visible_lines = inner_area.height as usize;
+        let available_height = if state.is_search_open {
+            inner_area.height.saturating_sub(1)
+        } else {
+            inner_area.height
+        };
+
+        let visible_lines = available_height as usize;
         let start_line = state.scroll_offset;
         let end_line = (start_line + visible_lines).min(state.lines.len());
 
@@ -424,10 +642,24 @@ impl<'a> StatefulWidget for EditorWidget<'a> {
                     if char_idx >= state.horizontal_offset && col < inner_area.x + inner_area.width
                     {
                         let mut style = span.style;
-                        if is_cursor_row && char_idx == state.cursor_col {
+                        let is_match = state.is_search_open
+                            && !state.search_query.is_empty()
+                            && state.search_matches.iter().any(|&(l, c)| {
+                                l == line_idx
+                                    && char_idx >= c
+                                    && char_idx < c + state.search_query.len()
+                            });
+
+                        if is_match {
+                            style = Style::default()
+                                .fg(Color::Black)
+                                .bg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD);
+                        } else if is_cursor_row && char_idx == state.cursor_col {
                             // Highlight cursor position with reversed colors
                             style = style.add_modifier(Modifier::REVERSED);
                         }
+
                         buf.get_mut(col, row).set_char(ch).set_style(style);
                         col += 1;
                     }
@@ -443,6 +675,34 @@ impl<'a> StatefulWidget for EditorWidget<'a> {
                 buf.get_mut(col, row)
                     .set_char(' ')
                     .set_style(Style::default().add_modifier(Modifier::REVERSED));
+            }
+        }
+
+        // Render search bar at bottom when search is active
+        if state.is_search_open && inner_area.height > 1 {
+            let search_row = inner_area.y + inner_area.height - 1;
+            let match_count = state.search_matches.len();
+            let match_info = if match_count == 0 {
+                "0/0".to_string()
+            } else {
+                format!("{}/{}", state.current_match_index + 1, match_count)
+            };
+            let search_bar = format!(
+                " Search: {} [{}] (Enter: Next, Up: Prev, Esc: Close) ",
+                state.search_query, match_info
+            );
+            let search_style = Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD);
+
+            for (idx, ch) in search_bar.chars().enumerate() {
+                let col = inner_area.x + idx as u16;
+                if col < inner_area.x + inner_area.width {
+                    buf.get_mut(col, search_row)
+                        .set_char(ch)
+                        .set_style(search_style);
+                }
             }
         }
     }
@@ -676,5 +936,63 @@ mod tests {
         assert!(state.handle_key(make_key(KeyCode::Home)));
         assert!(state.handle_key(make_key(KeyCode::Delete)));
         assert_eq!(state.get_code(), "et x");
+    }
+
+    #[test]
+    fn test_editor_undo_redo() {
+        let mut state = EditorState::new("let a = 1;");
+        state.insert_char(' ');
+        state.insert_char('2');
+        assert_eq!(state.get_code(), " 2let a = 1;");
+
+        // Undo
+        assert!(state.undo());
+        assert_eq!(state.get_code(), " let a = 1;");
+        assert!(state.undo());
+        assert_eq!(state.get_code(), "let a = 1;");
+
+        // Redo
+        assert!(state.redo());
+        assert_eq!(state.get_code(), " let a = 1;");
+        assert!(state.redo());
+        assert_eq!(state.get_code(), " 2let a = 1;");
+    }
+
+    #[test]
+    fn test_editor_auto_indentation() {
+        let mut state = EditorState::new("fn main() {");
+        state.cursor_line = 0;
+        state.cursor_col = 11;
+
+        state.insert_newline();
+        assert_eq!(state.lines.len(), 2);
+        assert_eq!(state.lines[1], "    ");
+        assert_eq!(state.cursor_col, 4);
+    }
+
+    #[test]
+    fn test_editor_in_buffer_search() {
+        let mut state = EditorState::new("let foo = 1;\nlet bar = foo + 2;\nfoo");
+        state.open_search();
+        assert!(state.is_search_open);
+
+        state.search_query = "foo".to_string();
+        state.update_search_matches();
+        assert_eq!(state.search_matches.len(), 3);
+        assert_eq!(state.search_matches[0], (0, 4));
+        assert_eq!(state.search_matches[1], (1, 10));
+        assert_eq!(state.search_matches[2], (2, 0));
+
+        state.next_search_match();
+        assert_eq!(state.cursor_line, 1);
+        assert_eq!(state.cursor_col, 10);
+
+        state.prev_search_match();
+        assert_eq!(state.cursor_line, 0);
+        assert_eq!(state.cursor_col, 4);
+
+        state.close_search();
+        assert!(!state.is_search_open);
+        assert!(state.search_query.is_empty());
     }
 }

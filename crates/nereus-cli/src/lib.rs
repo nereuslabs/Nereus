@@ -9,9 +9,11 @@ pub mod db;
 pub mod export;
 pub mod format;
 pub mod provider;
+pub mod search;
 pub mod session;
+pub mod sync;
 
-pub use args::{BenchArgs, Cli, Commands, SessionsCommand};
+pub use args::{BenchArgs, Cli, Commands, SearchArgs, SessionsCommand, SyncArgs};
 pub use bench::run_benchmark_command;
 pub use db::resolve_db_path;
 pub use export::{
@@ -22,7 +24,9 @@ pub use format::{
     summarize_feedback,
 };
 pub use provider::{switch_llm_provider, switch_sandbox_runner};
+pub use search::search_command;
 pub use session::{delete_session_command, history_command, list_sessions_command};
+pub use sync::{resolve_journal_path, sync_command};
 
 use anyhow::Result;
 use nereus_core::models::{Assessment, UserLevel, UserProfile, Verdict};
@@ -85,6 +89,23 @@ pub async fn run(args: Cli) -> Result<()> {
                 let storage = Arc::new(SqliteStorage::new(&db_path)?);
                 return export_session_command(&storage, *session_id, format, output.as_deref())
                     .await;
+            }
+            Commands::Search(search_args) => {
+                let db_path = resolve_db_path(args.db.as_deref());
+                let storage = Arc::new(SqliteStorage::new(&db_path)?);
+                return search_command(&storage, &search_args.query, search_args.limit).await;
+            }
+            Commands::Sync(sync_args) => {
+                let db_path = resolve_db_path(args.db.as_deref());
+                let storage = Arc::new(SqliteStorage::new(&db_path)?);
+                return sync_command(
+                    &storage,
+                    sync_args.path.as_deref(),
+                    sync_args.remote.as_deref(),
+                    &sync_args.message,
+                    sync_args.dry_run,
+                )
+                .await;
             }
         }
     }

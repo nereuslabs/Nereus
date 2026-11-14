@@ -112,3 +112,22 @@ impl ConceptMastery {
         }
     }
 }
+
+/// Severity tier of an educational code smell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum SmellSeverity {
+    Info,
+    Warning,
+    Critical,
+}
+
+/// A pedagogical antipattern or code smell discovered via AST static analysis.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PedagogicalSmell {
+    pub rule_id: String,
+    pub severity: SmellSeverity,
+    pub line: usize,
+    pub column: usize,
+    pub message: String,
+    pub socratic_hint: String,
+}

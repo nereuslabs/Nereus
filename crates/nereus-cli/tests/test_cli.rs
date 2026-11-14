@@ -283,3 +283,91 @@ async fn test_cli_bench_subcommand_e2e() {
     let res = run(cli).await;
     assert!(res.is_ok(), "Benchmark command failed: {:?}", res);
 }
+
+#[tokio::test]
+async fn test_cli_sessions_export_e2e() {
+    let db = temp_db_path();
+
+    // 1. Run a session to persist context and assessments
+    let init_cli = Cli::parse_from([
+        "nereus",
+        "--skill",
+        "Rust Concurrency",
+        "--offline",
+        "--demo",
+        "--db",
+        &db,
+    ]);
+    run(init_cli).await.unwrap();
+
+    let storage = SqliteStorage::new(&db).unwrap();
+    let sessions = storage.list_sessions().await.unwrap();
+    assert_eq!(sessions.len(), 1);
+    let session_id = sessions[0].session_id;
+
+    // 2. Export Markdown to file
+    let md_path = std::env::temp_dir()
+        .join(format!("test_export_{}.md", session_id))
+        .to_string_lossy()
+        .to_string();
+    let export_md = Cli::parse_from([
+        "nereus",
+        "--db",
+        &db,
+        "sessions",
+        "export",
+        &session_id.to_string(),
+        "--format",
+        "markdown",
+        "--output",
+        &md_path,
+    ]);
+    let res_md = run(export_md).await;
+    assert!(res_md.is_ok());
+    assert!(std::path::Path::new(&md_path).exists());
+    let md_content = std::fs::read_to_string(&md_path).unwrap();
+    assert!(md_content.contains("# 🌊 Nereus Learning Session Report"));
+    assert!(md_content.contains("Rust Concurrency"));
+    let _ = std::fs::remove_file(&md_path);
+
+    // 3. Export Asciinema Cast to stdout
+    let export_cast = Cli::parse_from([
+        "nereus",
+        "--db",
+        &db,
+        "sessions",
+        "export",
+        &session_id.to_string(),
+        "--format",
+        "cast",
+    ]);
+    let res_cast = run(export_cast).await;
+    assert!(res_cast.is_ok());
+
+    // 4. Export SVG
+    let svg_path = std::env::temp_dir()
+        .join(format!("test_export_{}.svg", session_id))
+        .to_string_lossy()
+        .to_string();
+    let export_svg = Cli::parse_from([
+        "nereus",
+        "--db",
+        &db,
+        "sessions",
+        "export",
+        &session_id.to_string(),
+        "--format",
+        "svg",
+        "--output",
+        &svg_path,
+    ]);
+    let res_svg = run(export_svg).await;
+    assert!(res_svg.is_ok());
+    assert!(std::path::Path::new(&svg_path).exists());
+    let svg_content = std::fs::read_to_string(&svg_path).unwrap();
+    assert!(svg_content.contains("<svg"));
+    assert!(svg_content.contains("</svg>"));
+    let _ = std::fs::remove_file(&svg_path);
+
+    cleanup_db(&db);
+}

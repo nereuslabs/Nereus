@@ -6,6 +6,7 @@
 pub mod args;
 pub mod bench;
 pub mod db;
+pub mod export;
 pub mod format;
 pub mod provider;
 pub mod session;
@@ -13,6 +14,9 @@ pub mod session;
 pub use args::{BenchArgs, Cli, Commands, SessionsCommand};
 pub use bench::run_benchmark_command;
 pub use db::resolve_db_path;
+pub use export::{
+    export_session_command, render_session_cast, render_session_markdown, render_session_svg,
+};
 pub use format::{
     format_ascii_table, format_history_table, format_sessions_table, resolve_current_topic,
     summarize_feedback,
@@ -71,6 +75,16 @@ pub async fn run(args: Cli) -> Result<()> {
                 let db_path = resolve_db_path(args.db.as_deref());
                 let storage = Arc::new(SqliteStorage::new(&db_path)?);
                 return delete_session_command(&storage, *session_id).await;
+            }
+            Commands::Sessions(SessionsCommand::Export {
+                session_id,
+                format,
+                output,
+            }) => {
+                let db_path = resolve_db_path(args.db.as_deref());
+                let storage = Arc::new(SqliteStorage::new(&db_path)?);
+                return export_session_command(&storage, *session_id, format, output.as_deref())
+                    .await;
             }
         }
     }

@@ -7,7 +7,7 @@ class Nereus < Formula
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/nereuslabs/nereus/releases/download/v0.2.0/nereus-v0.2.0-darwin-arm64.tar.gz"
-      sha256 "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      sha256 "88bb9bd0ad9b90af1cf3d80e51ae6cb58816fb57aff6518dcfc7cf8ecd6e1dd2"
     else
       url "https://github.com/nereuslabs/nereus/releases/download/v0.2.0/nereus-v0.2.0-darwin-x64.tar.gz"
       sha256 "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

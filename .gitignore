@@ -18,4 +18,5 @@ worktrees/
 # Packaging artifacts
 packages/**/vendor/
 node_modules/
+/dist/
 

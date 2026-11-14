@@ -28,11 +28,8 @@ pub async fn switch_llm_provider(registry: &ModuleRegistry, provider_id: &str) -
                 .unwrap_or_else(|_| "mock-anthropic-key".to_string());
             Arc::new(AnthropicClient::new(key))
         }
-        "ollama" => Arc::new(OpenRouterClient::with_base_url(
-            "http://localhost:11434/v1/chat/completions",
-            "ollama",
-            Some("llama3.3".to_string()),
-        )),
+        "ollama" => Arc::new(nereus_llm::OllamaClient::default()),
+        "candle" | "local" => Arc::new(nereus_llm::LocalCandleClient::default()),
         other => anyhow::bail!("Unsupported LLM provider identifier: '{other}'"),
     };
 
@@ -83,6 +80,11 @@ mod tests {
         let res = switch_llm_provider(&registry, "ollama").await;
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), "ollama");
+
+        // Switch to candle / local
+        let res = switch_llm_provider(&registry, "candle").await;
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), "candle");
 
         // Switch back to stub
         let res = switch_llm_provider(&registry, "stub").await;

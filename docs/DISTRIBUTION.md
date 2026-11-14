@@ -72,17 +72,17 @@ Formula path: `Formula/nereus.rb`
 class Nereus < Formula
   desc "Terminal-First AI Programming Mentor Built in Rust"
   homepage "https://nereuslabs.github.io"
-  version "0.2.0"
+  version "0.3.0"
   license "MIT"
 
   if OS.mac? && Hardware::CPU.arm?
-    url "https://github.com/nereuslabs/nereus/releases/download/v0.2.0/nereus-v0.2.0-darwin-arm64.tar.gz"
+    url "https://github.com/nereuslabs/nereus/releases/download/v0.3.0/nereus-v0.3.0-darwin-arm64.tar.gz"
     sha256 "REPLACE_WITH_ACTUAL_SHA256_ARM64"
   elsif OS.mac? && Hardware::CPU.intel?
-    url "https://github.com/nereuslabs/nereus/releases/download/v0.2.0/nereus-v0.2.0-darwin-x64.tar.gz"
+    url "https://github.com/nereuslabs/nereus/releases/download/v0.3.0/nereus-v0.3.0-darwin-x64.tar.gz"
     sha256 "REPLACE_WITH_ACTUAL_SHA256_X64"
   elsif OS.linux? && Hardware::CPU.intel?
-    url "https://github.com/nereuslabs/nereus/releases/download/v0.2.0/nereus-v0.2.0-linux-x64.tar.gz"
+    url "https://github.com/nereuslabs/nereus/releases/download/v0.3.0/nereus-v0.3.0-linux-x64.tar.gz"
     sha256 "REPLACE_WITH_ACTUAL_SHA256_LINUX_X64"
   end
 

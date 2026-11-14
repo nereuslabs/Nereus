@@ -11,6 +11,7 @@ pub use cockpit::{CockpitApp, FocusedPane};
 pub use events::{AppAction, AppEvent, EventHandler};
 pub use layout::{calculate_cockpit_layout, CockpitPanes};
 pub use widgets::{
-    highlight_rust_line, EditorState, EditorWidget, LighthouseWidget, RoadmapState, RoadmapWidget,
+    centered_rect, highlight_rust_line, DiagnosticQuizWidget, EditorState, EditorWidget,
+    HelpWidget, LighthouseWidget, QuizState, RoadmapState, RoadmapWidget, StatusBarWidget,
     TheoryViewerWidget, DEFAULT_CODE_BOILERPLATE, TOTAL_LIGHTHOUSE_FRAMES,
 };

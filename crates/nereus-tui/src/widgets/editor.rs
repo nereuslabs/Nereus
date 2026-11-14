@@ -2,6 +2,7 @@
 //!
 //! Copyright (c) 2026 Nereus Labs. Licensed under the MIT License.
 
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -246,6 +247,76 @@ impl EditorState {
         let line_len = self.lines.get(self.cursor_line).map_or(0, |l| l.len());
         if self.cursor_col > line_len {
             self.cursor_col = line_len;
+        }
+    }
+
+    /// Dispatches keyboard events into character insertions, deletions, newlines, and cursor movements.
+    ///
+    /// Supports:
+    /// - Inserting typed characters (regular printable characters and shifted symbols)
+    /// - `Enter`: Splits line / inserts newline
+    /// - `Backspace`: Deletes preceding character or merges lines
+    /// - `Delete`: Deletes current character or merges next line
+    /// - Arrow keys (`Left`, `Right`, `Up`, `Down`): Cursor movement
+    /// - `Home`: Moves cursor to the start of the current line
+    /// - `End`: Moves cursor to the end of the current line
+    /// - `PageUp` / `PageDown`: Fast vertical scrolling
+    ///
+    /// Returns `true` if the event was handled and mutated state.
+    pub fn handle_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Char(c)
+                if !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                self.insert_char(c);
+                true
+            }
+            KeyCode::Enter => {
+                self.insert_newline();
+                true
+            }
+            KeyCode::Backspace => {
+                self.delete_backspace();
+                true
+            }
+            KeyCode::Delete => {
+                self.delete_char();
+                true
+            }
+            KeyCode::Left => {
+                self.move_cursor_left();
+                true
+            }
+            KeyCode::Right => {
+                self.move_cursor_right();
+                true
+            }
+            KeyCode::Up => {
+                self.move_cursor_up();
+                true
+            }
+            KeyCode::Down => {
+                self.move_cursor_down();
+                true
+            }
+            KeyCode::Home => {
+                self.move_to_line_start();
+                true
+            }
+            KeyCode::End => {
+                self.move_to_line_end();
+                true
+            }
+            KeyCode::PageUp => {
+                self.scroll_up(8);
+                true
+            }
+            KeyCode::PageDown => {
+                self.scroll_down(8);
+                true
+            }
+            _ => false,
         }
     }
 }
@@ -539,5 +610,71 @@ fn classify_token(token: &str) -> Span<'static> {
         Span::styled(token.to_string(), Style::default().fg(Color::LightCyan))
     } else {
         Span::styled(token.to_string(), Style::default().fg(Color::White))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyEventKind, KeyEventState};
+
+    fn make_key(code: KeyCode) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::empty(),
+            kind: KeyEventKind::Press,
+            state: KeyEventState::empty(),
+        }
+    }
+
+    #[test]
+    fn test_editor_handle_key_typing_and_navigation() {
+        let mut state = EditorState::new("");
+        assert_eq!(state.get_code(), "");
+
+        // Typing characters
+        assert!(state.handle_key(make_key(KeyCode::Char('l'))));
+        assert!(state.handle_key(make_key(KeyCode::Char('e'))));
+        assert!(state.handle_key(make_key(KeyCode::Char('t'))));
+        assert!(state.handle_key(make_key(KeyCode::Char(' '))));
+        assert!(state.handle_key(make_key(KeyCode::Char('x'))));
+        assert_eq!(state.get_code(), "let x");
+
+        // Enter for newline
+        assert!(state.handle_key(make_key(KeyCode::Enter)));
+        assert_eq!(state.get_code(), "let x\n");
+        assert_eq!(state.cursor_line, 1);
+        assert_eq!(state.cursor_col, 0);
+
+        // Type on new line
+        assert!(state.handle_key(make_key(KeyCode::Char('1'))));
+        assert_eq!(state.get_code(), "let x\n1");
+
+        // Backspace
+        assert!(state.handle_key(make_key(KeyCode::Backspace)));
+        assert_eq!(state.get_code(), "let x\n");
+
+        // Backspace at line start merges lines
+        assert!(state.handle_key(make_key(KeyCode::Backspace)));
+        assert_eq!(state.get_code(), "let x");
+        assert_eq!(state.cursor_line, 0);
+        assert_eq!(state.cursor_col, 5);
+
+        // Home and End
+        assert!(state.handle_key(make_key(KeyCode::Home)));
+        assert_eq!(state.cursor_col, 0);
+        assert!(state.handle_key(make_key(KeyCode::End)));
+        assert_eq!(state.cursor_col, 5);
+
+        // Arrow movement
+        assert!(state.handle_key(make_key(KeyCode::Left)));
+        assert_eq!(state.cursor_col, 4);
+        assert!(state.handle_key(make_key(KeyCode::Right)));
+        assert_eq!(state.cursor_col, 5);
+
+        // Delete key
+        assert!(state.handle_key(make_key(KeyCode::Home)));
+        assert!(state.handle_key(make_key(KeyCode::Delete)));
+        assert_eq!(state.get_code(), "et x");
     }
 }

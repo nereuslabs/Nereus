@@ -5,12 +5,13 @@
 use crate::events::{AppAction, AppEvent, EventHandler};
 use crate::layout::calculate_cockpit_layout;
 use crate::widgets::{
-    EditorState, EditorWidget, LighthouseWidget, RoadmapState, RoadmapWidget, TheoryViewerWidget,
+    centered_rect, DiagnosticQuizWidget, EditorState, EditorWidget, HelpWidget, LighthouseWidget,
+    QuizState, RoadmapState, RoadmapWidget, StatusBarWidget, TheoryViewerWidget,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use nereus_core::state::{LearningState, StateMachineContext};
 use ratatui::backend::Backend;
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
@@ -78,6 +79,10 @@ pub struct CockpitApp {
     pub roadmap_state: RoadmapState,
     /// State tracker for code submission editor buffer, cursor, and scroll
     pub editor_state: EditorState,
+    /// State tracker for baseline diagnostic quiz selection cursor
+    pub quiz_state: QuizState,
+    /// Flag indicating whether the Help modal overlay is visible
+    pub show_help: bool,
     /// Most recently submitted code snippet
     pub last_submission: Option<String>,
     /// Ephemeral status bar message
@@ -94,6 +99,8 @@ impl Default for CockpitApp {
             guidance_scroll: 0,
             roadmap_state: RoadmapState::new(),
             editor_state: EditorState::default(),
+            quiz_state: QuizState::new(),
+            show_help: false,
             last_submission: None,
             status_message: None,
         }
@@ -186,13 +193,30 @@ impl CockpitApp {
 
     /// Interactive event handler processing `crossterm::event::KeyEvent`.
     pub fn handle_key(&mut self, key: KeyEvent, ctx: &mut StateMachineContext) -> AppAction {
-        // Global termination shortcuts: Ctrl+C or Esc/q
+        // Global termination shortcuts: Ctrl+C
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             self.should_quit = true;
             return AppAction::Quit;
         }
 
-        // Tab focus cycling
+        // When Help modal overlay is open, dismiss it on Esc, ?, or q
+        if self.show_help {
+            if matches!(
+                key.code,
+                KeyCode::Esc | KeyCode::Char('?') | KeyCode::Char('q')
+            ) {
+                self.show_help = false;
+            }
+            return AppAction::None;
+        }
+
+        // Toggle help overlay with '?' when not typing inside the editor
+        if key.code == KeyCode::Char('?') && self.focused_pane != FocusedPane::Editor {
+            self.show_help = true;
+            return AppAction::None;
+        }
+
+        // Tab focus cycling across panes
         if key.code == KeyCode::Tab {
             self.cycle_focus();
             return AppAction::FocusChanged(self.focused_pane);
@@ -203,32 +227,37 @@ impl CockpitApp {
             return AppAction::FocusChanged(self.focused_pane);
         }
 
-        // Standard exit keybindings: 'q' or 'Esc'
-        if key.code == KeyCode::Char('q') || key.code == KeyCode::Esc {
-            self.should_quit = true;
-            return AppAction::Quit;
+        // In Diagnostic state, handle quiz question answers (1-4 or Up/Down + Enter)
+        if let LearningState::Diagnostic {
+            questions,
+            current_index,
+            answers,
+        } = &mut ctx.state
+        {
+            if let Some(q) = questions.get(*current_index) {
+                if let Some(chosen_idx) = self.quiz_state.handle_key(key, q.options.len()) {
+                    let answer = q.options[chosen_idx].clone();
+                    answers.push(answer.clone());
+                    *current_index += 1;
+                    self.quiz_state.selected_index = 0;
+                    self.status_message =
+                        Some(format!("Answered question {}: {}", *current_index, answer));
+                    return AppAction::Submit(answer);
+                }
+                if matches!(
+                    key.code,
+                    KeyCode::Up | KeyCode::Down | KeyCode::Char('j') | KeyCode::Char('k')
+                ) {
+                    return AppAction::None;
+                }
+            }
         }
 
-        // Scroll keybindings: Up/Down arrow or 'k'/'j'
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                self.scroll_up();
-                return AppAction::Scrolled {
-                    pane: self.focused_pane,
-                    delta: -1,
-                };
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                self.scroll_down();
-                return AppAction::Scrolled {
-                    pane: self.focused_pane,
-                    delta: 1,
-                };
-            }
-            KeyCode::Enter => {
-                // Submit code when focused on editor or general submit
+        // Editor pane specific interactive character editing and cursor movements
+        if self.focused_pane == FocusedPane::Editor {
+            // Direct submission shortcut from editor
+            if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Enter {
                 let submission = self.submit_code();
-                // Optionally update state context submission if examining
                 if let LearningState::Examining {
                     submission: sub, ..
                 } = &mut ctx.state
@@ -237,19 +266,17 @@ impl CockpitApp {
                 }
                 return AppAction::Submit(submission);
             }
-            _ => {}
-        }
 
-        // Additional editor buffer navigation and editing when Editor pane is focused
-        if self.focused_pane == FocusedPane::Editor {
+            // Universal exit with Esc
+            if key.code == KeyCode::Esc {
+                self.should_quit = true;
+                return AppAction::Quit;
+            }
+
             match key.code {
-                KeyCode::Left | KeyCode::Char('h') => {
-                    self.editor_state.move_cursor_left();
-                    return AppAction::None;
-                }
-                KeyCode::Right | KeyCode::Char('l') => {
-                    self.editor_state.move_cursor_right();
-                    return AppAction::None;
+                KeyCode::Enter => {
+                    self.editor_state.insert_newline();
+                    return AppAction::BufferModified;
                 }
                 KeyCode::Backspace => {
                     self.editor_state.delete_backspace();
@@ -258,6 +285,28 @@ impl CockpitApp {
                 KeyCode::Delete => {
                     self.editor_state.delete_char();
                     return AppAction::BufferModified;
+                }
+                KeyCode::Left => {
+                    self.editor_state.move_cursor_left();
+                    return AppAction::None;
+                }
+                KeyCode::Right => {
+                    self.editor_state.move_cursor_right();
+                    return AppAction::None;
+                }
+                KeyCode::Up => {
+                    self.editor_state.move_cursor_up();
+                    return AppAction::Scrolled {
+                        pane: FocusedPane::Editor,
+                        delta: -1,
+                    };
+                }
+                KeyCode::Down => {
+                    self.editor_state.move_cursor_down();
+                    return AppAction::Scrolled {
+                        pane: FocusedPane::Editor,
+                        delta: 1,
+                    };
                 }
                 KeyCode::Home => {
                     self.editor_state.move_to_line_start();
@@ -281,8 +330,49 @@ impl CockpitApp {
                         delta: 8,
                     };
                 }
-                _ => {}
+                KeyCode::Char(c)
+                    if !key.modifiers.contains(KeyModifiers::CONTROL)
+                        && !key.modifiers.contains(KeyModifiers::ALT) =>
+                {
+                    self.editor_state.insert_char(c);
+                    return AppAction::BufferModified;
+                }
+                _ => return AppAction::None,
             }
+        }
+
+        // Standard navigation & exit keybindings for Roadmap, Task, and Guidance panes
+        if key.code == KeyCode::Char('q') || key.code == KeyCode::Esc {
+            self.should_quit = true;
+            return AppAction::Quit;
+        }
+
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.scroll_up();
+                return AppAction::Scrolled {
+                    pane: self.focused_pane,
+                    delta: -1,
+                };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.scroll_down();
+                return AppAction::Scrolled {
+                    pane: self.focused_pane,
+                    delta: 1,
+                };
+            }
+            KeyCode::Enter => {
+                let submission = self.submit_code();
+                if let LearningState::Examining {
+                    submission: sub, ..
+                } = &mut ctx.state
+                {
+                    *sub = Some(submission.clone());
+                }
+                return AppAction::Submit(submission);
+            }
+            _ => {}
         }
 
         AppAction::None
@@ -328,11 +418,23 @@ impl CockpitApp {
         Ok(AppAction::Quit)
     }
 
-    /// Renders all 4 panes of the cockpit using mutable self to update inner widget states.
+    /// Renders all 4 panes, status bar, and any modal overlays.
     pub fn draw_mut(&mut self, frame: &mut Frame, ctx: &StateMachineContext) {
         self.sync_focus_states();
         let area = frame.size();
-        let panes = calculate_cockpit_layout(area);
+
+        // 0. Compute layout with bottom status bar
+        let (cockpit_area, status_area) = if area.height >= 4 {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(3), Constraint::Length(1)])
+                .split(area);
+            (chunks[0], chunks[1])
+        } else {
+            (area, Rect::default())
+        };
+
+        let panes = calculate_cockpit_layout(cockpit_area);
 
         // 1. Roadmap Pane
         let is_roadmap_focused = self.focused_pane == FocusedPane::Roadmap;
@@ -342,7 +444,7 @@ impl CockpitApp {
                 Span::styled(
                     "[ACTIVE]",
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
                 ),
             ])
@@ -369,104 +471,147 @@ impl CockpitApp {
 
         frame.render_stateful_widget(roadmap_widget, panes.roadmap, &mut self.roadmap_state);
 
-        // 2. Challenge & Theory Pane
+        // 2. Challenge & Theory Pane (or Diagnostic Quiz Widget during Diagnostic state)
         let is_task_focused = self.focused_pane == FocusedPane::Task;
-        let task_title = if is_task_focused {
-            Line::from(vec![
-                Span::raw(" 🧪 Challenge & Theory "),
-                Span::styled(
-                    "[ACTIVE]",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ])
-        } else {
-            Line::from(vec![Span::raw(" 🧪 Challenge & Theory ")])
-        };
-
         let task_border_style = if is_task_focused {
             Style::default()
-                .fg(Color::Yellow)
+                .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::DarkGray)
         };
 
-        let task_text = match &ctx.state {
-            LearningState::Tutoring { material, task, .. } => {
-                format!("# Theory & Conceptual Framework\n\n{material}\n\n---\n\n## 🎯 Challenge Assignment\n\n{task}")
-            }
-            LearningState::Examining {
-                task,
-                submission,
-                assessment,
-                ..
-            } => {
-                let mut content = format!("## 🎯 Active Challenge\n\n{task}\n\n---\n");
-                if let Some(sub) = submission {
-                    content.push_str(&format!(
-                        "### Submitted Code Buffer\n```rust\n{sub}\n```\n\n"
-                    ));
-                }
-                if let Some(a) = assessment {
-                    content.push_str(&format!(
-                        "### Socratic Evaluation\n- Verdict: {:?}\n- Score: {:.1}%\n\n> {}\n",
-                        a.verdict, a.score, a.feedback
-                    ));
+        if let LearningState::Diagnostic {
+            questions,
+            current_index,
+            ..
+        } = &ctx.state
+        {
+            if let Some(q) = questions.get(*current_index) {
+                let quiz_title = if is_task_focused {
+                    Line::from(vec![
+                        Span::raw(" 🔍 Baseline Diagnostic "),
+                        Span::styled(
+                            "[ACTIVE]",
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ])
                 } else {
-                    content.push_str(
-                        "Waiting for student code submission...\nPress [Enter] to submit code.",
-                    );
-                }
-                content
+                    Line::from(vec![Span::raw(" 🔍 Baseline Diagnostic ")])
+                };
+
+                let quiz_block = Block::default()
+                    .title(quiz_title)
+                    .borders(Borders::ALL)
+                    .border_style(task_border_style);
+
+                let quiz_widget = DiagnosticQuizWidget::new(q, *current_index, questions.len())
+                    .block(quiz_block)
+                    .focused(is_task_focused);
+
+                frame.render_stateful_widget(quiz_widget, panes.task, &mut self.quiz_state);
+            } else {
+                let task_title = if is_task_focused {
+                    Line::from(vec![
+                        Span::raw(" 🔍 Baseline Diagnostic "),
+                        Span::styled(
+                            "[ACTIVE]",
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ])
+                } else {
+                    Line::from(vec![Span::raw(" 🔍 Baseline Diagnostic ")])
+                };
+
+                let task_block = Block::default()
+                    .title(task_title)
+                    .borders(Borders::ALL)
+                    .border_style(task_border_style);
+
+                let theory_widget = TheoryViewerWidget::new(
+                    "🔍 Baseline diagnostic quiz in progress. Analyzing responses...",
+                    self.task_scroll,
+                )
+                .block(task_block)
+                .focused(is_task_focused);
+
+                frame.render_widget(theory_widget, panes.task);
             }
-            LearningState::Diagnostic {
-                questions,
-                current_index,
-                ..
-            } => {
-                let total = questions.len();
-                if let Some(q) = questions.get(*current_index) {
-                    let mut text = format!(
-                        "# 🔍 Baseline Diagnostic ({}/{})\n\n{}\n\n",
-                        current_index + 1,
-                        total,
-                        q.question
-                    );
-                    for (i, opt) in q.options.iter().enumerate() {
-                        text.push_str(&format!("{}. {}\n", (b'A' + i as u8) as char, opt));
+        } else {
+            let task_title = if is_task_focused {
+                Line::from(vec![
+                    Span::raw(" 🧪 Challenge & Theory "),
+                    Span::styled(
+                        "[ACTIVE]",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ])
+            } else {
+                Line::from(vec![Span::raw(" 🧪 Challenge & Theory ")])
+            };
+
+            let task_text = match &ctx.state {
+                LearningState::Tutoring { material, task, .. } => {
+                    format!("# Theory & Conceptual Framework\n\n{material}\n\n---\n\n## 🎯 Challenge Assignment\n\n{task}")
+                }
+                LearningState::Examining {
+                    task,
+                    submission,
+                    assessment,
+                    ..
+                } => {
+                    let mut content = format!("## 🎯 Active Challenge\n\n{task}\n\n---\n");
+                    if let Some(sub) = submission {
+                        content.push_str(&format!(
+                            "### Submitted Code Buffer\n```rust\n{sub}\n```\n\n"
+                        ));
+                    }
+                    if let Some(a) = assessment {
+                        content.push_str(&format!(
+                            "### Socratic Evaluation\n- Verdict: {:?}\n- Score: {:.1}%\n\n> {}\n",
+                            a.verdict, a.score, a.feedback
+                        ));
+                    } else {
+                        content.push_str(
+                            "Waiting for student code submission...\nPress [Enter] to submit code.",
+                        );
+                    }
+                    content
+                }
+                LearningState::Coaching { weakness_report } => {
+                    let mut text = "# 🧭 Personalized Roadmap Formulation\n\nSynthesizing curriculum from diagnostic report...\n\n".to_string();
+                    if !weakness_report.weak_areas.is_empty() {
+                        text.push_str("### Identified Growth Areas:\n");
+                        for area in &weakness_report.weak_areas {
+                            text.push_str(&format!("- {area}\n"));
+                        }
                     }
                     text
-                } else {
-                    "🔍 Baseline diagnostic quiz in progress. Analyzing responses...".to_string()
                 }
-            }
-            LearningState::Coaching { weakness_report } => {
-                let mut text = "# 🧭 Personalized Roadmap Formulation\n\nSynthesizing curriculum from diagnostic report...\n\n".to_string();
-                if !weakness_report.weak_areas.is_empty() {
-                    text.push_str("### Identified Growth Areas:\n");
-                    for area in &weakness_report.weak_areas {
-                        text.push_str(&format!("- {area}\n"));
-                    }
+                LearningState::Completed => {
+                    "🎉 All roadmap milestones successfully mastered! Curriculum completed."
+                        .to_string()
                 }
-                text
-            }
-            LearningState::Completed => {
-                "🎉 All roadmap milestones successfully mastered! Curriculum completed.".to_string()
-            }
-        };
+                LearningState::Diagnostic { .. } => unreachable!(),
+            };
 
-        let task_block = Block::default()
-            .title(task_title)
-            .borders(Borders::ALL)
-            .border_style(task_border_style);
+            let task_block = Block::default()
+                .title(task_title)
+                .borders(Borders::ALL)
+                .border_style(task_border_style);
 
-        let theory_widget = TheoryViewerWidget::new(&task_text, self.task_scroll)
-            .block(task_block)
-            .focused(is_task_focused);
+            let theory_widget = TheoryViewerWidget::new(&task_text, self.task_scroll)
+                .block(task_block)
+                .focused(is_task_focused);
 
-        frame.render_widget(theory_widget, panes.task);
+            frame.render_widget(theory_widget, panes.task);
+        }
 
         // 3. Socratic Guidance Pane (with Animated Lighthouse Widget)
         let is_guidance_focused = self.focused_pane == FocusedPane::Guidance;
@@ -476,7 +621,7 @@ impl CockpitApp {
                 Span::styled(
                     "[ACTIVE]",
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
                 ),
             ])
@@ -486,7 +631,7 @@ impl CockpitApp {
 
         let guidance_border_style = if is_guidance_focused {
             Style::default()
-                .fg(Color::Magenta)
+                .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::DarkGray)
@@ -531,9 +676,9 @@ impl CockpitApp {
             Line::from(vec![
                 Span::raw(" 📝 Code Submission "),
                 Span::styled(
-                    "[ACTIVE - Enter: Submit, ↑/↓/j/k: Scroll, q: Quit]",
+                    "[ACTIVE]",
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
                 ),
             ])
@@ -543,7 +688,7 @@ impl CockpitApp {
 
         let editor_border_style = if is_editor_focused {
             Style::default()
-                .fg(Color::Green)
+                .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::DarkGray)
@@ -559,6 +704,21 @@ impl CockpitApp {
             .focused(is_editor_focused);
 
         frame.render_stateful_widget(editor_widget, panes.code_editor, &mut self.editor_state);
+
+        // 5. Persistent Bottom Status Bar Widget
+        if status_area.height > 0 {
+            let status_widget = StatusBarWidget::new()
+                .status_message(self.status_message.as_deref())
+                .current_state(Some(ctx.state.name()));
+            frame.render_widget(status_widget, status_area);
+        }
+
+        // 6. Help Modal Overlay (toggled with '?')
+        if self.show_help {
+            let popup_area = centered_rect(65, 75, area);
+            let help_widget = HelpWidget::new();
+            frame.render_widget(help_widget, popup_area);
+        }
     }
 
     /// Immutable draw method implementing backward compatibility.
@@ -571,6 +731,8 @@ impl CockpitApp {
             guidance_scroll: self.guidance_scroll,
             roadmap_state: self.roadmap_state.clone(),
             editor_state: self.editor_state.clone(),
+            quiz_state: self.quiz_state.clone(),
+            show_help: self.show_help,
             last_submission: self.last_submission.clone(),
             status_message: self.status_message.clone(),
         };
@@ -580,12 +742,19 @@ impl CockpitApp {
     fn sync_focus_states(&mut self) {
         self.roadmap_state.is_focused = self.focused_pane == FocusedPane::Roadmap;
         self.editor_state.is_focused = self.focused_pane == FocusedPane::Editor;
+        self.quiz_state.is_focused = self.focused_pane == FocusedPane::Task;
     }
 
     fn format_guidance_text(&self, ctx: &StateMachineContext) -> String {
         match &ctx.state {
-            LearningState::Examining { assessment: Some(a), .. } => {
-                format!("> 🗼 Lighthouse Beacon Feedback:\n{}\n\nScore: {:.1}% | Verdict: {:?}", a.feedback, a.score, a.verdict)
+            LearningState::Examining {
+                assessment: Some(a),
+                ..
+            } => {
+                format!(
+                    "> 🗼 Lighthouse Beacon Feedback:\n{}\n\nScore: {:.1}% | Verdict: {:?}",
+                    a.feedback, a.score, a.verdict
+                )
             }
             LearningState::Tutoring { retry_count, .. } if *retry_count > 0 => {
                 format!("> 💡 Socratic Reflection (Attempt {retry_count}):\nReflect on the compiler diagnostics. Does the lifetime outlive the caller scope?")

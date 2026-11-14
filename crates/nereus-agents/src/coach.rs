@@ -444,6 +444,31 @@ impl CoachAgent {
             topics: sorted_topics,
         }
     }
+
+    /// Compile a customized learning roadmap with prepended micro-drills for decayed concepts.
+    pub fn generate_roadmap_with_decay(
+        &self,
+        profile: &UserProfile,
+        weakness: &WeaknessReport,
+        decayed_drills: Vec<RoadmapTopic>,
+    ) -> Roadmap {
+        let mut roadmap = self.generate_roadmap(profile, weakness);
+        self.inject_decayed_concept_drills(&mut roadmap, decayed_drills);
+        roadmap
+    }
+
+    /// Prepends micro-drills for decayed concepts to the front of a roadmap.
+    pub fn inject_decayed_concept_drills(
+        &self,
+        roadmap: &mut Roadmap,
+        decayed_drills: Vec<RoadmapTopic>,
+    ) {
+        if !decayed_drills.is_empty() {
+            let mut combined = decayed_drills;
+            combined.append(&mut roadmap.topics);
+            roadmap.topics = combined;
+        }
+    }
 }
 
 #[async_trait]

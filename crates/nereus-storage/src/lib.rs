@@ -8,5 +8,5 @@ pub mod models;
 pub mod sqlite;
 
 pub use memory::MemoryStorage;
-pub use models::{AssessmentRecord, SessionRecord, SessionStore};
+pub use models::{AssessmentRecord, ConceptMastery, SessionRecord, SessionStore};
 pub use sqlite::{Migration, SqliteStorage, CURRENT_SCHEMA_VERSION, MIGRATIONS};

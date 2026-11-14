@@ -53,7 +53,7 @@ jobs:
 
       - name: Install cross (for aarch64 Linux)
         if: matrix.use_cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        uses: taiki-e/install-action@cross
 
       - name: Build release binary
         run: |

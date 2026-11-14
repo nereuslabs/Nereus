@@ -818,3 +818,40 @@ fn test_multi_agent_pedagogical_pipeline() {
     assert!(revision_material.contains("Anti-Pattern"));
     assert!(revision_task.contains("E0597"));
 }
+
+#[test]
+fn test_examiner_assess_with_ast_antipattern_detection() {
+    let examiner = ExaminerAgent::new();
+    let topic = RoadmapTopic {
+        id: "topic-1".to_string(),
+        title: "Ownership & Borrowing".to_string(),
+        description: "Ownership and move semantics".to_string(),
+        difficulty: 0.5,
+        estimated_hours: 2.0,
+        prerequisites: vec![],
+    };
+
+    let passing_sandbox = SandboxExecutionResult {
+        success: true,
+        exit_code: 0,
+        stdout: "test result: ok.".to_string(),
+        stderr: "".to_string(),
+        duration_ms: 120,
+    };
+
+    let smelly_code = r#"
+        pub fn solve(data: String) -> String {
+            let copy = data.clone();
+            copy
+        }
+    "#;
+
+    let assessment = examiner.assess_with_ast(&topic, &passing_sandbox, smelly_code);
+    assert_eq!(assessment.verdict, Verdict::Pass);
+    assert!(assessment
+        .feedback
+        .contains("Pedagogical Code Quality Observations"));
+    assert!(
+        assessment.feedback.contains("CLONE_USAGE") || assessment.feedback.contains(".clone()")
+    );
+}

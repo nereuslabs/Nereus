@@ -1,12 +1,14 @@
 //! Nereus Sandbox: Execution-driven assessment environments.
 //! Copyright (c) 2026 Nereus Labs. Licensed under the MIT License.
 
+pub mod ast;
 pub mod curriculum;
 pub mod diagnostic;
 pub mod host;
 pub mod mock;
 pub mod wasm;
 
+pub use ast::AstInspector;
 pub use curriculum::{Challenge, Curriculum};
 pub use diagnostic::{CompilerDiagnostic, DiagnosticLevel, DiagnosticParser, DiagnosticSpan};
 pub use host::{

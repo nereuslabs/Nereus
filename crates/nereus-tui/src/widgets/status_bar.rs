@@ -60,6 +60,8 @@ impl<'a> Widget for StatusBarWidget<'a> {
             Span::styled(" Submit  ", desc_style),
             Span::styled("[?]", key_style),
             Span::styled(" Help  ", desc_style),
+            Span::styled("[Ctrl+P]", key_style),
+            Span::styled(" Provider  ", desc_style),
             Span::styled("[q]", key_style),
             Span::styled(" Quit", desc_style),
         ];

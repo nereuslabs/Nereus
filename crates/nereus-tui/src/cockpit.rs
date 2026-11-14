@@ -6,7 +6,8 @@ use crate::events::{AppAction, AppEvent, EventHandler};
 use crate::layout::calculate_cockpit_layout;
 use crate::widgets::{
     centered_rect, DiagnosticQuizWidget, EditorState, EditorWidget, HelpWidget, LighthouseWidget,
-    QuizState, RoadmapState, RoadmapWidget, StatusBarWidget, TheoryViewerWidget,
+    ProviderDialogWidget, ProviderState, QuizState, RoadmapState, RoadmapWidget, StatusBarWidget,
+    TheoryViewerWidget,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use nereus_core::state::{LearningState, StateMachineContext};
@@ -83,6 +84,10 @@ pub struct CockpitApp {
     pub quiz_state: QuizState,
     /// Flag indicating whether the Help modal overlay is visible
     pub show_help: bool,
+    /// Flag indicating whether the Provider hot-switching modal overlay is visible
+    pub show_provider_dialog: bool,
+    /// State tracker for runtime LLM provider selection dialog
+    pub provider_state: ProviderState,
     /// Most recently submitted code snippet
     pub last_submission: Option<String>,
     /// Ephemeral status bar message
@@ -101,6 +106,8 @@ impl Default for CockpitApp {
             editor_state: EditorState::default(),
             quiz_state: QuizState::new(),
             show_help: false,
+            show_provider_dialog: false,
+            provider_state: ProviderState::default(),
             last_submission: None,
             status_message: None,
         }
@@ -207,6 +214,34 @@ impl CockpitApp {
             ) {
                 self.show_help = false;
             }
+            return AppAction::None;
+        }
+
+        // When Provider hot-switching modal overlay is open, handle navigation or dismiss
+        if self.show_provider_dialog {
+            if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) {
+                self.show_provider_dialog = false;
+                return AppAction::None;
+            }
+            if let Some(chosen_id) = self.provider_state.handle_key(key) {
+                self.show_provider_dialog = false;
+                self.status_message = Some(format!("Switched LLM provider to: {chosen_id}"));
+                return AppAction::SwitchProvider(chosen_id.to_string());
+            }
+            return AppAction::None;
+        }
+
+        // Toggle provider selection dialog with Ctrl+P, F2 (or 'p' / ':' when outside editor)
+        if (key.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(key.code, KeyCode::Char('p') | KeyCode::Char('P')))
+            || key.code == KeyCode::F(2)
+            || (self.focused_pane != FocusedPane::Editor
+                && matches!(
+                    key.code,
+                    KeyCode::Char('p') | KeyCode::Char('P') | KeyCode::Char(':')
+                ))
+        {
+            self.show_provider_dialog = true;
             return AppAction::None;
         }
 
@@ -719,6 +754,12 @@ impl CockpitApp {
             let help_widget = HelpWidget::new();
             frame.render_widget(help_widget, popup_area);
         }
+
+        // 7. Provider Hot-Switching Dialog Overlay (toggled with 'Ctrl+P')
+        if self.show_provider_dialog {
+            let provider_widget = ProviderDialogWidget::new(&self.provider_state);
+            provider_widget.render(frame, area);
+        }
     }
 
     /// Immutable draw method implementing backward compatibility.
@@ -733,6 +774,8 @@ impl CockpitApp {
             editor_state: self.editor_state.clone(),
             quiz_state: self.quiz_state.clone(),
             show_help: self.show_help,
+            show_provider_dialog: self.show_provider_dialog,
+            provider_state: self.provider_state.clone(),
             last_submission: self.last_submission.clone(),
             status_message: self.status_message.clone(),
         };

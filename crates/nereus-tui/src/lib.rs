@@ -12,6 +12,7 @@ pub use events::{AppAction, AppEvent, EventHandler};
 pub use layout::{calculate_cockpit_layout, CockpitPanes};
 pub use widgets::{
     centered_rect, highlight_rust_line, DiagnosticQuizWidget, EditorState, EditorWidget,
-    HelpWidget, LighthouseWidget, QuizState, RoadmapState, RoadmapWidget, StatusBarWidget,
-    TheoryViewerWidget, DEFAULT_CODE_BOILERPLATE, TOTAL_LIGHTHOUSE_FRAMES,
+    HelpWidget, LighthouseWidget, ProviderDialogWidget, ProviderOption, ProviderState, QuizState,
+    RoadmapState, RoadmapWidget, StatusBarWidget, TheoryViewerWidget, AVAILABLE_PROVIDERS,
+    DEFAULT_CODE_BOILERPLATE, TOTAL_LIGHTHOUSE_FRAMES,
 };

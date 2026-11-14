@@ -234,3 +234,45 @@ async fn test_cli_resume_errors() {
 
     cleanup_db(&db);
 }
+
+#[tokio::test]
+async fn test_cli_hot_switch_providers_integration() {
+    use nereus_cli::{switch_llm_provider, switch_sandbox_runner};
+    use nereus_llm::StubLLMClient;
+    use nereus_plugin::ModuleRegistry;
+    use nereus_sandbox::MockSandboxRunner;
+    use std::sync::Arc;
+
+    let db = temp_db_path();
+    let storage = Arc::new(SqliteStorage::new(&db).unwrap());
+    let registry = ModuleRegistry::new(
+        Arc::new(StubLLMClient::new()),
+        Arc::new(MockSandboxRunner::new(false)),
+        storage,
+    );
+
+    // 1. Hot-switch LLM provider
+    let switched = switch_llm_provider(&registry, "stub").await.unwrap();
+    assert_eq!(switched, "stub");
+
+    let switched = switch_llm_provider(&registry, "openrouter").await.unwrap();
+    assert_eq!(switched, "openrouter");
+
+    let switched = switch_llm_provider(&registry, "anthropic").await.unwrap();
+    assert_eq!(switched, "anthropic");
+
+    let switched = switch_llm_provider(&registry, "ollama").await.unwrap();
+    assert_eq!(switched, "ollama");
+
+    // 2. Hot-switch Sandbox runner
+    let s_switched = switch_sandbox_runner(&registry, "mock").await.unwrap();
+    assert_eq!(s_switched, "mock");
+
+    let s_switched = switch_sandbox_runner(&registry, "host").await.unwrap();
+    assert_eq!(s_switched, "host");
+
+    let s_switched = switch_sandbox_runner(&registry, "wasmtime").await.unwrap();
+    assert_eq!(s_switched, "wasmtime");
+
+    cleanup_db(&db);
+}

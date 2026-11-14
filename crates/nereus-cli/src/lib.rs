@@ -6,6 +6,7 @@
 pub mod args;
 pub mod db;
 pub mod format;
+pub mod provider;
 pub mod session;
 
 pub use args::{Cli, Commands, SessionsCommand};
@@ -14,6 +15,7 @@ pub use format::{
     format_ascii_table, format_history_table, format_sessions_table, resolve_current_topic,
     summarize_feedback,
 };
+pub use provider::{switch_llm_provider, switch_sandbox_runner};
 pub use session::{delete_session_command, history_command, list_sessions_command};
 
 use anyhow::Result;

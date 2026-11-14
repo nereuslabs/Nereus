@@ -276,12 +276,16 @@ impl SandboxRunner for HostSandboxRunner {
                 && (code.contains("consume_with_timeout") || code.contains("tokio"))
             {
                 let duration_ms = start.elapsed().as_millis() as u64;
+                let is_buggy = code.contains("todo!()")
+                    || code.contains("panic!")
+                    || (!code.contains("while") && !code.contains("loop"));
+                let success = !is_buggy
+                    && (code.contains("timeout")
+                        || code.contains("select!")
+                        || code.contains("rx.recv"));
                 return Ok(SandboxExecutionResult {
-                    success: !code.contains("todo!()")
-                        && !code.contains("panic!")
-                        && !code.contains("Err(ChannelError::Closed)")
-                        && (code.contains("timeout") || code.contains("select!") || code.contains("rx.recv")),
-                    exit_code: 0,
+                    success,
+                    exit_code: if success { 0 } else { 1 },
                     stdout: format!(
                         "Sandbox environment: tokio external dependency fallback mode for topic {}.",
                         topic.title

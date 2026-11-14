@@ -276,3 +276,10 @@ async fn test_cli_hot_switch_providers_integration() {
 
     cleanup_db(&db);
 }
+
+#[tokio::test]
+async fn test_cli_bench_subcommand_e2e() {
+    let cli = Cli::parse_from(["nereus", "bench", "--offline", "--format", "json"]);
+    let res = run(cli).await;
+    assert!(res.is_ok(), "Benchmark command failed: {:?}", res);
+}

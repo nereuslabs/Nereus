@@ -4,12 +4,14 @@
 #![deny(warnings)]
 
 pub mod args;
+pub mod bench;
 pub mod db;
 pub mod format;
 pub mod provider;
 pub mod session;
 
-pub use args::{Cli, Commands, SessionsCommand};
+pub use args::{BenchArgs, Cli, Commands, SessionsCommand};
+pub use bench::run_benchmark_command;
 pub use db::resolve_db_path;
 pub use format::{
     format_ascii_table, format_history_table, format_sessions_table, resolve_current_topic,
@@ -49,23 +51,32 @@ pub fn print_banner() {
 
 /// Main entrypoint orchestrating command execution, session discovery, and automaton lifecycle.
 pub async fn run(args: Cli) -> Result<()> {
-    let db_path = resolve_db_path(args.db.as_deref());
-    let storage = Arc::new(SqliteStorage::new(&db_path)?);
-
-    // 1. Handle explicit sessions subcommand if provided
+    // 1. Handle subcommands if provided
     if let Some(cmd) = &args.command {
         match cmd {
+            Commands::Bench(bench_args) => {
+                return run_benchmark_command(bench_args).await;
+            }
             Commands::Sessions(SessionsCommand::List) => {
+                let db_path = resolve_db_path(args.db.as_deref());
+                let storage = Arc::new(SqliteStorage::new(&db_path)?);
                 return list_sessions_command(&storage).await;
             }
             Commands::Sessions(SessionsCommand::History { session_id }) => {
+                let db_path = resolve_db_path(args.db.as_deref());
+                let storage = Arc::new(SqliteStorage::new(&db_path)?);
                 return history_command(&storage, *session_id).await;
             }
             Commands::Sessions(SessionsCommand::Delete { session_id }) => {
+                let db_path = resolve_db_path(args.db.as_deref());
+                let storage = Arc::new(SqliteStorage::new(&db_path)?);
                 return delete_session_command(&storage, *session_id).await;
             }
         }
     }
+
+    let db_path = resolve_db_path(args.db.as_deref());
+    let storage = Arc::new(SqliteStorage::new(&db_path)?);
 
     // 2. Mentor session execution (either resume or new session)
     print_banner();

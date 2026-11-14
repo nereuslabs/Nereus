@@ -64,6 +64,29 @@ pub enum Commands {
     /// Manage stored learning sessions and assessment history
     #[command(subcommand, alias = "session")]
     Sessions(SessionsCommand),
+
+    /// Run the automated Socratic Mentor LLM Benchmark Suite
+    Bench(BenchArgs),
+}
+
+/// Arguments for `nereus bench`.
+#[derive(clap::Args, Debug, Clone, PartialEq, Eq)]
+pub struct BenchArgs {
+    /// LLM provider or model identifier to benchmark [default: "stub"]
+    #[arg(short, long, default_value = "stub")]
+    pub model: String,
+
+    /// Force deterministic offline benchmark execution via StubLLMClient
+    #[arg(long, default_value_t = false)]
+    pub offline: bool,
+
+    /// Output format for benchmark report (markdown or json) [default: "markdown"]
+    #[arg(short, long, default_value = "markdown")]
+    pub format: String,
+
+    /// Optional file path to export benchmark report
+    #[arg(short, long)]
+    pub export: Option<String>,
 }
 
 /// Subcommands under `nereus sessions`.
@@ -167,6 +190,20 @@ mod tests {
         assert_eq!(
             cli2.command,
             Some(Commands::Sessions(SessionsCommand::List))
+        );
+    }
+
+    #[test]
+    fn test_bench_subcommand_args() {
+        let cli = Cli::parse_from(["nereus", "bench", "--offline", "--format", "json"]);
+        assert_eq!(
+            cli.command,
+            Some(Commands::Bench(BenchArgs {
+                model: "stub".to_string(),
+                offline: true,
+                format: "json".to_string(),
+                export: None,
+            }))
         );
     }
 }

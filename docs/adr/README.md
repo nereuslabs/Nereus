@@ -20,6 +20,8 @@ We adhere to the [Markdown Any Decision Record (MADR)](https://adr.github.io/mad
 | [`0008`](0008-ebbinghaus-forgetting-curve-and-spaced-repetition.md) | Ebbinghaus Forgetting Curve and Spaced Repetition Knowledge Graph | **Accepted** | 2026-11-14 |
 | [`0009`](0009-socratic-mentor-llm-benchmark-suite.md) | Hermetic LLM Socratic Mentor Benchmark Suite and Solution Leakage Detection | **Accepted** | 2026-11-14 |
 | [`0010`](0010-multi-format-session-replay-and-visual-terminal-export.md) | Multi-Format Session Replay and Visual Terminal Export | **Accepted** | 2026-11-14 |
+| [`0011`](0011-embedded-local-llm-inference-with-candle-and-ollama.md) | Embedded Local LLM Inference with Candle and Ollama | **Accepted** | 2026-11-14 |
+| [`0012`](0012-tree-sitter-ast-semantic-code-analysis.md) | Tree-Sitter AST Static Analysis & Anti-Pattern Detection | **Accepted** | 2026-11-14 |
 
 ---
 

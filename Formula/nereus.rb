@@ -20,7 +20,7 @@ class Nereus < Formula
       sha256 "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     else
       url "https://github.com/nereuslabs/nereus/releases/download/v0.2.0/nereus-v0.2.0-linux-x64.tar.gz"
-      sha256 "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      sha256 "930da8904947cf2350058439b563ed4fbbc2174aab72e1a39e44028434a133bb"
     end
   end
 

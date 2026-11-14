@@ -1,0 +1,18 @@
+//! Nereus TUI: Terminal Cockpit interface using Ratatui.
+//!
+//! Copyright (c) 2026 Nereus Labs. Licensed under the MIT License.
+
+pub mod cockpit;
+pub mod events;
+pub mod layout;
+pub mod widgets;
+
+pub use cockpit::{CockpitApp, FocusedPane};
+pub use events::{AppAction, AppEvent, EventHandler};
+pub use layout::{calculate_cockpit_layout, CockpitPanes};
+pub use widgets::{
+    centered_rect, highlight_rust_line, DiagnosticQuizWidget, EditorState, EditorWidget,
+    HelpWidget, LighthouseWidget, ProviderDialogWidget, ProviderOption, ProviderState, QuizState,
+    RoadmapState, RoadmapWidget, StatusBarWidget, TheoryViewerWidget, AVAILABLE_PROVIDERS,
+    DEFAULT_CODE_BOILERPLATE, TOTAL_LIGHTHOUSE_FRAMES,
+};

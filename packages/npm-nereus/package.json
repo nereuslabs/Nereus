@@ -1,0 +1,41 @@
+{
+  "name": "@nereuslabs/nereus",
+  "version": "0.2.0",
+  "description": "The Terminal-First AI Programming Mentor Built in Rust",
+  "license": "MIT",
+  "author": "Nereus Labs <support@nereuslabs.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nereuslabs/nereus.git"
+  },
+  "homepage": "https://nereuslabs.github.io",
+  "bugs": {
+    "url": "https://github.com/nereuslabs/nereus/issues"
+  },
+  "keywords": [
+    "ai",
+    "terminal",
+    "rust",
+    "mentor",
+    "socratic",
+    "tui",
+    "cli",
+    "education"
+  ],
+  "bin": {
+    "nereus": "bin/nereus.js"
+  },
+  "scripts": {
+    "postinstall": "node install.js",
+    "test": "node test.js"
+  },
+  "files": [
+    "bin/",
+    "install.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

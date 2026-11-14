@@ -1,17 +1,39 @@
-[package]
-name = "nereus"
+[workspace]
+resolver = "2"
+members = [
+    "crates/nereus-core",
+    "crates/nereus-engine",
+    "crates/nereus-agents",
+    "crates/nereus-llm",
+    "crates/nereus-sandbox",
+    "crates/nereus-storage",
+    "crates/nereus-tui",
+    "crates/nereus-plugin",
+    "crates/nereus-cli",
+]
+
+[workspace.package]
 version = "0.2.0"
 edition = "2021"
 authors = ["Nereus Labs <develop.nereus@gmail.com>"]
 license = "MIT"
-description = "The Terminal-First AI Programming Mentor Built in Rust"
 repository = "https://github.com/nereuslabs/nereus"
 readme = "README.md"
-keywords = ["ai", "tutor", "socratic", "tui", "learning"]
+keywords = ["ai", "tutor", "socratic", "tui", "learning", "wasm"]
 categories = ["command-line-utilities", "development-tools"]
 
-[dependencies]
-# Async Runtime & Concurrency
+[workspace.dependencies]
+# Internal workspace crates
+nereus-core = { path = "crates/nereus-core", version = "0.2.0" }
+nereus-engine = { path = "crates/nereus-engine", version = "0.2.0" }
+nereus-agents = { path = "crates/nereus-agents", version = "0.2.0" }
+nereus-llm = { path = "crates/nereus-llm", version = "0.2.0" }
+nereus-sandbox = { path = "crates/nereus-sandbox", version = "0.2.0" }
+nereus-storage = { path = "crates/nereus-storage", version = "0.2.0" }
+nereus-tui = { path = "crates/nereus-tui", version = "0.2.0" }
+nereus-plugin = { path = "crates/nereus-plugin", version = "0.2.0" }
+
+# Async runtime & Concurrency
 tokio = { version = "1.38", features = ["full"] }
 async-trait = "0.1"
 futures = "0.3"
@@ -25,16 +47,16 @@ clap = { version = "4.5", features = ["derive", "env"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# Networking & LLM API
+# Networking & LLM APIs
 reqwest = { version = "0.12", features = ["json", "stream"] }
 eventsource-stream = "0.2"
 
-# Persistence & Storage
+# Persistence & Identifiers
 rusqlite = { version = "0.31", features = ["bundled"] }
 uuid = { version = "1.8", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
-# Logging & Error Handling
+# Logging, Tracing & Error Handling
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1.0"

@@ -8,3 +8,14 @@ Cargo.lock
 .DS_Store
 .idea
 .vscode
+.openidea/
+rust_out
+
+# Local device-only developer tooling (NOT tracked in git)
+.kanban/
+worktrees/
+
+# Packaging artifacts
+packages/**/vendor/
+node_modules/
+

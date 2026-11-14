@@ -106,6 +106,20 @@ pub enum SessionsCommand {
         /// Session UUID to delete
         session_id: Uuid,
     },
+
+    /// Export a learning session to Markdown, Asciinema .cast, or SVG format
+    Export {
+        /// Session UUID to export
+        session_id: Uuid,
+
+        /// Output format (markdown, cast, or svg) [default: markdown]
+        #[arg(short, long, default_value = "markdown")]
+        format: String,
+
+        /// Optional output file path
+        #[arg(short, long)]
+        output: Option<String>,
+    },
 }
 
 #[cfg(test)]
@@ -203,6 +217,29 @@ mod tests {
                 offline: true,
                 format: "json".to_string(),
                 export: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn test_sessions_export_subcommand() {
+        let id_str = "550e8400-e29b-41d4-a716-446655440000";
+        let cli = Cli::parse_from([
+            "nereus",
+            "sessions",
+            "export",
+            id_str,
+            "--format",
+            "cast",
+            "--output",
+            "/tmp/out.cast",
+        ]);
+        assert_eq!(
+            cli.command,
+            Some(Commands::Sessions(SessionsCommand::Export {
+                session_id: Uuid::parse_str(id_str).unwrap(),
+                format: "cast".to_string(),
+                output: Some("/tmp/out.cast".to_string()),
             }))
         );
     }

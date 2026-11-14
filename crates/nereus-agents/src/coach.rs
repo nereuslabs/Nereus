@@ -61,9 +61,27 @@ impl Default for CoachAgent {
 }
 
 impl CoachAgent {
-    /// Initialize CoachAgent with a rich default curriculum catalog.
+    /// Initialize CoachAgent with default curriculum topics from `nereus_sandbox::curriculum::Curriculum`.
+    /// Falls back to the built-in topic catalog if the curriculum returns an empty list.
     pub fn new() -> Self {
-        let default_catalog = vec![
+        let curriculum_topics = nereus_sandbox::curriculum::Curriculum::default_topics();
+        let default_catalog = if !curriculum_topics.is_empty() {
+            curriculum_topics
+        } else {
+            Self::builtin_fallback_catalog()
+        };
+
+        Self { default_catalog }
+    }
+
+    /// Creates a CoachAgent with a custom topic catalog.
+    pub fn with_catalog(default_catalog: Vec<RoadmapTopic>) -> Self {
+        Self { default_catalog }
+    }
+
+    /// Built-in fallback catalog of foundational Rust topics.
+    pub fn builtin_fallback_catalog() -> Vec<RoadmapTopic> {
+        vec![
             RoadmapTopic {
                 id: "topic-ownership".to_string(),
                 title: "Memory Safety & RAII Semantics".to_string(),
@@ -128,9 +146,7 @@ impl CoachAgent {
                 prerequisites: vec!["topic-lifetimes".to_string()],
                 estimated_hours: 5.0,
             },
-        ];
-
-        Self { default_catalog }
+        ]
     }
 
     /// Access the curriculum catalog.

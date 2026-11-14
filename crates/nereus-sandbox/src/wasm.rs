@@ -10,7 +10,7 @@ use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 use wasmtime::{Caller, Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder};
 
-use crate::host::{prepare_harness_code, Scratchpad};
+use crate::host::{prepare_harness_code_for_topic, Scratchpad};
 
 /// Default instruction fuel allowance: 50 million instructions.
 pub const DEFAULT_MAX_FUEL: u64 = 50_000_000;
@@ -293,7 +293,7 @@ impl SandboxRunner for WasmtimeSandboxRunner {
             CoreError::SandboxError(format!("Failed to create temporary scratchpad: {e}"))
         })?;
 
-        let harness_code = prepare_harness_code(code);
+        let harness_code = prepare_harness_code_for_topic(topic, code);
         let source_path = scratchpad
             .write_file("solution.rs", &harness_code)
             .map_err(|e| {
@@ -301,7 +301,13 @@ impl SandboxRunner for WasmtimeSandboxRunner {
             })?;
         let wasm_path = scratchpad.path().join("solution.wasm");
 
+        let is_test = harness_code.contains("#[test]");
+
         let mut compile_cmd = Command::new(&self.compiler_path);
+        compile_cmd.arg("--edition").arg("2021");
+        if is_test {
+            compile_cmd.arg("--test");
+        }
         compile_cmd
             .arg("--target")
             .arg(&self.target)

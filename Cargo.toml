@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Nereus Labs <develop.nereus@gmail.com>"]
 license = "MIT"
@@ -24,14 +24,14 @@ categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
 # Internal workspace crates
-nereus-core = { path = "crates/nereus-core", version = "0.2.0" }
-nereus-engine = { path = "crates/nereus-engine", version = "0.2.0" }
-nereus-agents = { path = "crates/nereus-agents", version = "0.2.0" }
-nereus-llm = { path = "crates/nereus-llm", version = "0.2.0" }
-nereus-sandbox = { path = "crates/nereus-sandbox", version = "0.2.0" }
-nereus-storage = { path = "crates/nereus-storage", version = "0.2.0" }
-nereus-tui = { path = "crates/nereus-tui", version = "0.2.0" }
-nereus-plugin = { path = "crates/nereus-plugin", version = "0.2.0" }
+nereus-core = { path = "crates/nereus-core", version = "0.3.0" }
+nereus-engine = { path = "crates/nereus-engine", version = "0.3.0" }
+nereus-agents = { path = "crates/nereus-agents", version = "0.3.0" }
+nereus-llm = { path = "crates/nereus-llm", version = "0.3.0" }
+nereus-sandbox = { path = "crates/nereus-sandbox", version = "0.3.0" }
+nereus-storage = { path = "crates/nereus-storage", version = "0.3.0" }
+nereus-tui = { path = "crates/nereus-tui", version = "0.3.0" }
+nereus-plugin = { path = "crates/nereus-plugin", version = "0.3.0" }
 
 # Async runtime & Concurrency
 tokio = { version = "1.38", features = ["full"] }

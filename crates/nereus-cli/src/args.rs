@@ -8,7 +8,7 @@ use uuid::Uuid;
 #[derive(Parser, Debug, Clone)]
 #[command(
     name = "nereus",
-    version = "0.2.0",
+    version = "0.3.0",
     about = "🌊 The Terminal-First AI Programming Mentor Built in Rust",
     long_about = "Nereus 2.0 is an autonomous AI coding companion engineered in Rust. It diagnoses baseline gaps, generates adaptive roadmaps, and provides strict Socratic feedback using an algebraic state automaton."
 )]

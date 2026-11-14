@@ -18,7 +18,7 @@ assert(fs.existsSync(pkgPath), "package.json must exist");
 const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 
 assert.strictEqual(pkg.name, "@nereuslabs/nereus");
-assert.strictEqual(pkg.version, "0.2.0");
+assert.strictEqual(pkg.version, "0.3.0");
 assert.strictEqual(pkg.license, "MIT");
 assert.strictEqual(pkg.bin.nereus, "bin/nereus.js");
 assert.strictEqual(pkg.scripts.postinstall, "node install.js");
@@ -78,8 +78,8 @@ if (runResult.stderr) {
 }
 assert.strictEqual(runResult.status, 0, `Launcher must exit with 0, got ${runResult.status}`);
 assert(
-  runResult.stdout.toLowerCase().includes("nereus") || runResult.stdout.includes("0.2.0"),
-  "Launcher output must contain 'nereus' or '0.2.0'"
+  runResult.stdout.toLowerCase().includes("nereus") || runResult.stdout.includes("0.3.0"),
+  "Launcher output must contain 'nereus' or '0.3.0'"
 );
 console.log("   ✓ Launcher execution succeeded.\n");
 

@@ -1,143 +1,99 @@
-# 🗺️ Nereus 2.0 Product & Engineering Roadmap
+# 🗺️ Nereus Product & Engineering Roadmap
 
 ## 1. Vision & Trajectory
 
 **Nereus 2.0** represents the definitive transition from experimental Python prototypes to a high-performance, single-binary, terminal-native AI coding cockpit built in **idiomatic Rust**.
 
-The roadmap is structured into 8 chronological engineering phases, taking Nereus from its initial architectural specification through to a hardened production release (`v2.0-stable`).
+The roadmap is structured into chronological engineering milestones, transitioning Nereus from initial architectural prototypes through its modular multi-agent ecosystem and onwards to distributed collaborative mentorship.
 
 ```mermaid
 gantt
-    title Nereus 2.0 Engineering Timeline
+    title Nereus Engineering Milestones
     dateFormat  YYYY-MM-DD
-    section Core Infrastructure
-    Phase 0 - Spec & Domain Models        :done, p0, 2026-10-15, 2026-11-02
-    Phase 1 - Cargo Workspace & Framework :active, p1, 2026-11-03, 2026-11-15
-    Phase 2 - Algebraic FSM Engine        :p2, 2026-11-16, 2026-11-30
-    section Agent & Sandboxing
-    Phase 3 - Asynchronous LLM Client     :p3, 2026-12-01, 2026-12-15
-    Phase 4 - The 4 Autonomous Agents     :p4, 2026-12-16, 2026-12-31
-    Phase 5 - Isolated Sandbox Engine     :p5, 2027-01-01, 2027-01-15
-    section Interface & Extensibility
-    Phase 6 - Ratatui Terminal Cockpit    :p6, 2027-01-16, 2027-01-31
-    Phase 7 - Dynamic Plugin & Hot-Swap   :p7, 2027-02-01, 2027-02-15
-    Phase 8 - Production Hardening v2.0   :p8, 2027-02-16, 2027-02-28
+    section Architectural Foundations
+    Phase 0 - Spec & Domain Models (v0.1.0)       :done, p0, 2026-10-15, 2026-11-02
+    Phase 1 - Modular Workspace & MVP (v0.2.0)    :done, p1, 2026-11-03, 2026-11-14
+    section Extensible Ecosystem & Multi-Agent
+    Phase 2 - Local LLM, WIT Host & Swarm (v0.3.0):done, p2, 2026-11-14, 2026-11-14
+    section Distributed Mentorship & Voice
+    Phase 3 - Swarm Collaboration & Voice (v0.4.0) :active, p3, 2026-11-15, 2026-12-15
+    Phase 4 - Production Enterprise Hardening (v1.0):p4, 2026-12-16, 2027-01-31
 ```
 
 ---
 
-## 2. Phase Breakdown
+## 2. Milestone Breakdown
 
 ### Phase 0: Architecture Specification & Domain Models ✅
-* **Status**: Completed (v0.2.0-alpha)
+* **Version**: `v0.1.0` (Completed 2026-11-02)
 * **Deliverables**:
   - Technical specification RFC and domain model definitions (`UserProfile`, `Roadmap`, `Assessment`).
   - Core algebraic state enum `LearningState` drafted.
   - License migrated to permissive MIT; branding assets created.
-  - Python v1 repository permanently archived at `nereuslabs/nereus-v1`.
+  - Legacy Python v1 repository permanently archived at `nereuslabs/nereus-v1`.
 
 ---
 
-### Phase 1: Cargo Workspace & Modular Framework Skeleton 🚀
-* **Target Version**: `v0.2.1-alpha`
-* **Focus**: Decomposing monolithic crate into the 9-crate Cargo workspace.
+### Phase 1: Modular Workspace & Terminal MVP Release ✅
+* **Version**: `v0.2.0` (Completed 2026-11-14)
+* **Focus**: 9-crate Cargo workspace, compile-time algebraic FSM, and full Ratatui TUI cockpit.
 * **Deliverables**:
-  - `Cargo.toml` workspace root configuration.
-  - Crates created: `nereus-core`, `nereus-engine`, `nereus-agents`, `nereus-llm`, `nereus-sandbox`, `nereus-storage`, `nereus-tui`, `nereus-plugin`, `nereus-cli`.
-  - Common trait definitions moved into `nereus-core`.
-  - Git worktree documentation and local directory scaffolding.
-
----
-
-### Phase 2: Algebraic State Machine & Event Loop Engine
-* **Target Version**: `v0.3.0-alpha`
-* **Focus**: Pure state transition function and asynchronous event dispatch.
-* **Deliverables**:
-  - `nereus-engine` event loop implementation.
-  - State persistence and rehydration protocol via `serde_json`.
-  - Retry counter enforcement and diagnostic branching logic.
-  - 100% hermetic unit tests verifying all state permutations.
-
----
-
-### Phase 3: Multi-Provider Async LLM Client Layer
-* **Target Version**: `v0.4.0-alpha`
-* **Focus**: Unified asynchronous inference with zero-cost offline mocks.
-* **Deliverables**:
-  - Async `LLMClient` trait in `nereus-core`.
-  - Deterministic `StubLLMClient` with scripted response patterns for hermetic testing.
-  - Production `OpenRouterClient` supporting streaming SSE (`eventsource-stream`).
-  - Structured output parsing with automatic repair retries on malformed JSON.
-
----
-
-### Phase 4: The 4 Specialized Autonomous Agents
-* **Target Version**: `v0.5.0-alpha`
-* **Focus**: Deep implementation of agent logic in `nereus-agents`.
-* **Deliverables**:
-  - `DiagnosticAgent`: Adaptive question generator and weakness evaluator.
-  - `CoachAgent`: Dependency-ordered milestone roadmap synthesizer.
-  - `TutorAgent`: Concise theory authoring and dynamic retry revisions.
-  - `ExaminerAgent`: Socratic feedback engine and dynamic passing score calculator:
+  - Decoupled 9-crate Cargo workspace: `nereus-core`, `nereus-engine`, `nereus-agents`, `nereus-llm`, `nereus-sandbox`, `nereus-storage`, `nereus-tui`, `nereus-plugin`, `nereus-cli`.
+  - Core algebraic state machine (`enum LearningState`) with deterministic Socratic threshold formula:
     $$\text{Threshold} = \min\left(70.0 + (\text{topic.difficulty} \times 15.0),\, 85.0\right)$$
+  - 4 foundational pedagogical agents: `DiagnosticAgent`, `CoachAgent` (DAG topological sort), `TutorAgent`, and `ExaminerAgent`.
+  - In-memory WebAssembly sandbox powered by `wasmtime` with strict fuel and memory caps, alongside host `rustc` compiler scratchpad.
+  - Ratatui full-screen interactive cockpit: split panes, rotating Socratic Lighthouse, interactive diagnostic quiz, and syntax-highlighted editor.
+  - SQLite session persistence with Write-Ahead Logging (WAL) mode and automated schema migrations.
+  - Standardized Socratic Mentor Benchmark Suite (`nereus bench`).
+  - Multi-platform packaging: npm binary launcher (`@nereuslabs/nereus`), Homebrew formula (`nereuslabs/tap/nereus`), and multi-arch GitHub Actions release pipeline.
 
 ---
 
-### Phase 5: Isolated Execution Sandbox (`nereus-sandbox`)
-* **Target Version**: `v0.6.0-alpha`
-* **Focus**: Real code compilation and sandboxed testing.
+### Phase 2: Extensible Pedagogical Ecosystem, Local Inference & Advanced Agents ✅
+* **Version**: `v0.3.0` (Completed 2026-11-14)
+* **Focus**: Static AST inspection, zero-cloud pure-Rust LLM inference, WebAssembly Component Model, and expanded multi-agent collaboration.
 * **Deliverables**:
-  - In-memory WebAssembly sandbox powered by `wasmtime` with fuel consumption limits.
-  - Subprocess host runner with OS-level sandboxing (Linux namespaces / macOS sandbox-exec / Windows Job Objects).
-  - Compiler error diagnostic parser (capturing Rust `E0xxx` codes, stack traces, and test output).
-  - Integration with `ExaminerAgent` for execution-driven assessment.
+  - **AST-Level Static Code Analysis & Anti-Pattern Inspector** (`nereus-sandbox`):
+    - `syn::visit` traversal detecting redundant `.clone()`, dangerous `.unwrap()`, unvetted `unsafe`, and C-style index loops with Socratic remediation hints.
+  - **In-Process Local LLM Inference Engine** (`nereus-llm`):
+    - Pure-Rust `LocalCandleClient` via Hugging Face `candle` tensor framework and native `OllamaClient` alongside cloud providers.
+    - CLI provider switching (`nereus provider`) and in-cockpit runtime hot-switching (`Ctrl+P` / `F2`).
+  - **Advanced Specialized Agents** (`nereus-agents`):
+    - `LibrarianAgent`: Offline standard library and Rustonomicon search, compiler error citation mapping (`E0382`, `E0597`, etc.).
+    - `AdversaryAgent`: Property-based educational fuzzing with boundary stress, arithmetic overflow, and concurrency race vectors.
+  - **Ratatui Cockpit Editor Polish & UX** (`nereus-tui`):
+    - Unbounded Undo/Redo ring buffer (`Ctrl+Z`, `Ctrl+Y`), dynamic line numbering, modal search (`Ctrl+F`), and full crossterm mouse integration.
+  - **Full-Text Search & Git Journal Synchronization** (`nereus-storage`, `nereus-cli`):
+    - SQLite FTS5 extension (`nereus search <query>`) and automated Git learning journal backups (`nereus sync`).
+  - **WebAssembly Component Model Host** (`nereus-plugin`):
+    - Canonical WIT specification (`nereus:curriculum@0.3.0`) for language-agnostic external curriculum packs.
+    - Component binary header verification (`\0asm`) and sidecar manifest parser.
+  - **Architecture Decision Records**: ADR 0011, ADR 0012, ADR 0013, ADR 0014.
 
 ---
 
-### Phase 6: Ratatui Terminal Cockpit (TUI)
-* **Target Version**: `v0.7.0-beta`
-* **Focus**: Professional retro-modern terminal user interface.
-* **Deliverables**:
-  - 4-pane responsive terminal layout:
-    * **Top-Left**: Interactive Roadmap Navigator.
-    * **Top-Right**: Theory & Challenge Viewer.
-    * **Bottom-Left**: Socratic Guidance & Lighthouse Feedback.
-    * **Bottom-Right**: Code Input & Submission Cockpit.
-  - Asynchronous event polling with Tokio channels (60 FPS rendering without stutter).
-  - Retro cyber-ocean theme with custom ASCII lighthouse animations.
+### Phase 3: Distributed Swarm Collaboration & Socratic Voice Cockpit 🚀
+* **Target Version**: `v0.4.0` (Target: Q4 2026)
+* **Focus**: Multi-device synchronization, decentralized agent swarm, and real-time voice interaction.
+* **Planned Deliverables**:
+  - **Distributed Multi-Agent Swarm**: Blackboard pattern orchestration allowing parallel specialized agents (Compiler, Code Reviewer, Security Auditor, Performance Benchmarker) to critique code submissions concurrently.
+  - **Socratic Voice Cockpit**: Real-time voice interaction over local Whisper STT and streaming TTS for conversational terminal coding drills.
+  - **Language Server Protocol (LSP) Bridge**: Direct background communication with `rust-analyzer` to feed deep compiler diagnostics directly into `ExaminerAgent`.
+  - **WebAssembly WASI Browser Cockpit**: Web-based zero-installation Nereus interactive terminal playground compiled to WASM.
 
 ---
 
-### Phase 7: Dynamic Plugin System & Hot-Swapping
-* **Target Version**: `v0.8.0-beta`
-* **Focus**: Dynamic module hot-reloading without session termination.
-* **Deliverables**:
-  - `ModuleRegistry` supporting in-memory dynamic trait swaps.
-  - Native shared library (`.dylib`/`.so`) loader via `libloading` with ABI verification.
-  - WebAssembly Component Model plugin host on `wasmtime`.
-  - File-system watcher (`notify`) for automated hot-reloading during development.
-
----
-
-### Phase 8: Production Hardening, SQLite Storage & v2.0-Stable Release
-* **Target Version**: `v2.0.0`
-* **Focus**: Enterprise resilience, SQLite persistence, and final release promotion.
-* **Deliverables**:
-  - SQLite session store with Write-Ahead Logging (WAL) and schema migrations.
-  - Multi-platform release binaries (macOS ARM/x86, Linux x86/aarch64, Windows x64).
-  - GitHub Actions CI/CD pipeline promoting to `main` via admin ruleset gates.
-  - Comprehensive user guides, documentation verification, and release announcement.
-
----
-
-## 3. Beyond v2.0: Future Horizons
-
-* **Collaborative Terminal Pairing**: Multi-user terminal sessions over encrypted WebSockets.
-* **Language Server Protocol (LSP) Bridge**: Embedding `rust-analyzer` and `clangd` diagnostics directly into the Socratic Examiner.
-* **Local SLM Integration**: Zero-latency local execution using quantized Small Language Models via `llama.cpp` / `candle`.
+### Phase 4: Production Enterprise Hardening & Enterprise Certifications 🛡️
+* **Target Version**: `v1.0.0` (Target: Q1 2027)
+* **Focus**: Team management, progress analytics dashboards, enterprise LMS SCORM export, and SOC2/ISO compliance.
+* **Planned Deliverables**:
+  - Multi-tenant organization progress tracking and cohort analytics dashboards.
+  - Exportable proof-of-mastery cryptographically signed credentials.
+  - Integration with corporate Git repositories (GitHub Enterprise, GitLab Self-Managed).
 
 ---
 
 <div align="center">
-  <sub>Nereus Labs Product Roadmap • v2.0 • MIT License</sub>
+  <sub>Nereus Labs Product Roadmap • MIT License</sub>
 </div>

@@ -20,16 +20,16 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-00BBF9?style=for-the-badge&logo=open-source-initiative&logoColor=white" alt="License: MIT" /></a>
   <a href="https://ratatui.rs/"><img src="https://img.shields.io/badge/UI-Ratatui_TUI-4361EE?style=for-the-badge&logo=gnometerminal&logoColor=white" alt="TUI: Ratatui" /></a>
   <a href="https://github.com/nereuslabs/nereus/actions/workflows/ci.yml"><img src="https://github.com/nereuslabs/nereus/actions/workflows/ci.yml/badge.svg?branch=develop" alt="CI Status" /></a>
-  <a href="https://github.com/nereuslabs/nereus/releases"><img src="https://img.shields.io/badge/Version-0.2.0-FF0055?style=for-the-badge" alt="Version 0.2.0" /></a>
+  <a href="https://github.com/nereuslabs/nereus/releases"><img src="https://img.shields.io/badge/Version-0.3.0-FF0055?style=for-the-badge" alt="Version 0.3.0" /></a>
 </p>
 
 <!-- Quick Navigation -->
 <p align="center">
   <a href="#-overview">Overview</a> •
   <a href="#-terminal-cockpit-tui">Terminal Cockpit</a> •
-  <a href="#-architecture--the-4-agents">Architecture</a> •
+  <a href="#-architecture--the-6-specialized-agents">Architecture</a> •
   <a href="#-quick-start">Quick Start</a> •
-  <a href="#-features">Features</a> •
+  <a href="#-key-capabilities">Features</a> •
   <a href="#-roadmap">Roadmap</a> •
   <a href="#-contributing">Contributing</a>
 </p>
@@ -75,7 +75,7 @@ Named after the ancient Greek sea elder who guided navigators with unflinching h
 
 ---
 
-## 🏗️ Architecture & The 4 Agents
+## 🏗️ Architecture & The 6 Specialized Agents
 
 Instead of an unstructured chat loop, Nereus orchestrates an algebraic finite state machine:
 
@@ -88,13 +88,16 @@ flowchart TD
     Road --> Tutor[📖 Tutor Agent]
     Tutor --> Exam[⚖️ Examiner Agent]
     Exam --> Sandbox{🧪 Sandbox Execution}
-    Sandbox -->|FAIL / Compiler Error| Retry[💡 Socratic Clues & Hints]
+    Sandbox -->|FAIL / Compiler Error| Lib[📚 Librarian Agent: std/Book Citations]
+    Lib --> Retry[💡 Socratic Clues & Hints]
     Retry --> Tutor
-    Sandbox -->|PASS Score >= 75| Advance[🎉 Advance Topic]
+    Sandbox -->|PASS Initial Tests| Adv[😈 Adversary Agent: Property Fuzzing]
+    Adv -->|Boundary Breach| Retry
+    Adv -->|PASS Score >= 75| Advance[🎉 Advance Topic]
     Advance --> Road
 ```
 
-### The 4 Specialized Agents
+### The 6 Specialized Agents
 
 | Agent | Icon | Role & Responsibility |
 | :--- | :---: | :--- |
@@ -102,6 +105,8 @@ flowchart TD
 | **Coach** | 🧭 | Assembles milestones, deadlines, and prerequisites into an ordered `Roadmap` that targets weak areas first. |
 | **Tutor** | 📖 | Synthesizes concise theory and delivers hands-on coding challenges. On retry, generates targeted revision modules. |
 | **Examiner** | ⚖️ | Compiles and executes code in a sandbox, evaluates assertions, scores performance, and guides debugging. |
+| **Librarian** | 📚 | Offline semantic retriever for the Rust standard library and Rustonomicon; maps compiler diagnostics (`E0382`, `E0597`) to official citations. |
+| **Adversary** | 😈 | Property-based educational fuzzer; synthesizes boundary cases, arithmetic overflow stress, and concurrency race conditions. |
 
 ### The 9-Crate Modular Workspace
 
@@ -140,12 +145,12 @@ nereus/
 ├── crates/
 │   ├── nereus-core/      # Pure domain models, FSM enums, core subsystem traits (Zero I/O)
 │   ├── nereus-engine/    # State transition orchestrator & Socratic threshold formula
-│   ├── nereus-agents/    # Diagnostic, Coach (DAG sort), Tutor, and Examiner implementations
-│   ├── nereus-llm/       # Stub, OpenRouter, and Anthropic clients with structured retry loop
-│   ├── nereus-sandbox/   # Host scratchpad & Wasmtime in-memory runner with fuel metering
-│   ├── nereus-storage/   # SQLite WAL mode persistence with schema migrations
-│   ├── nereus-tui/       # Ratatui terminal cockpit & animated Socratic Lighthouse
-│   ├── nereus-plugin/    # ModuleRegistry container for Tier-1 runtime hot-switching
+│   ├── nereus-agents/    # The 6 Socratic agents (Diagnostic, Coach, Tutor, Examiner, Librarian, Adversary)
+│   ├── nereus-llm/       # OpenRouter, Anthropic, Ollama, Candle (local), and deterministic Stub
+│   ├── nereus-sandbox/   # Host scratchpad, Wasmtime WASM runner, and syn AST anti-pattern analyzer
+│   ├── nereus-storage/   # SQLite WAL mode persistence, FTS5 full-text search, and schema migrations
+│   ├── nereus-tui/       # Ratatui terminal cockpit, undo/redo buffer, search modal & Socratic Lighthouse
+│   ├── nereus-plugin/    # ModuleRegistry hot-switching container & Wasm Component Model host
 │   └── nereus-cli/       # Main unified executable binary
 ```
 
@@ -192,6 +197,8 @@ Commands:
   resume    Resume a learning session (latest or specified by ID)
   sessions  Explore, view history, export, or manage stored sessions
   bench     Run the Socratic mentor benchmark suite against compiler errors
+  search    Search historical topic assessments and feedback using full-text search (FTS5)
+  sync      Synchronize learning journals and assessment logs with Git repository
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -212,6 +219,8 @@ Subcommand Examples:
   nereus sessions history <SESSION_ID>             # Show chronological assessment log
   nereus sessions export <SESSION_ID> --format svg # Export visual vector SVG badge
   nereus bench --offline --format markdown         # Run hermetic Socratic benchmark
+  nereus search "borrow checker"                   # Full-text search across past assessments
+  nereus sync --path ~/.nereus/journal             # Synchronize learning notes with Git repo
 ```
 </details>
 
@@ -222,7 +231,12 @@ Subcommand Examples:
 - [x] **Sub-millisecond Cold Starts**: Engineered in 100% idiomatic Rust; launches in <4ms with ~15MB RAM footprint.
 - [x] **Algebraic State Automaton**: Exhaustive compile-time state transitions (`enum LearningState`) preventing runtime drift.
 - [x] **Interactive Split-Pane Cockpit**: Ratatui TUI with live code editor, syntax highlighting, rotating Socratic Lighthouse, and diagnostic quiz widget.
-- [x] **Runtime Provider Hot-Switching**: In-cockpit modal (`Ctrl+P`, `F2`) to hot-swap LLMs (`OpenRouter`, `Anthropic`, `Stub`) and sandboxes (`Wasmtime`, `Host`, `Mock`).
+- [x] **Cockpit Editor Polish**: Unbounded Undo/Redo ring buffer (`Ctrl+Z`/`Ctrl+Y`), dynamic line numbering, inside-buffer search (`Ctrl+F`), and crossterm mouse support.
+- [x] **AST Static Code Analysis**: In-memory `syn::visit` traversal detecting redundant `.clone()`, `.unwrap()`, `unsafe`, and C-style index loops with Socratic hints.
+- [x] **Local Zero-Cloud Inference**: Pure-Rust in-process inference via `candle` tensors and local `Ollama` support alongside OpenRouter and Anthropic.
+- [x] **6 Specialized Pedagogical Agents**: `DiagnosticAgent`, `CoachAgent`, `TutorAgent`, `ExaminerAgent`, `LibrarianAgent`, and `AdversaryAgent`.
+- [x] **WebAssembly Component Model Host**: Canonical WIT interface (`nereus:curriculum@0.3.0`) for sandboxed, language-agnostic curriculum components.
+- [x] **SQLite FTS5 & Git Learning Journal**: Full-text assessment search (`nereus search`) and version-controlled Git synchronization (`nereus sync`).
 - [x] **Spaced Repetition Decay Engine**: Mathematical Ebbinghaus retention model ($R(t) = 2^{-t/S}$) with automated prerequisite micro-drills.
 - [x] **Socratic Benchmark Suite**: Standardized 10-problem compiler error suite with solution leakage detection regexes (`nereus bench`).
 - [x] **Multi-Format Session Export**: Export learning sessions to standalone Markdown, Asciinema v2 (`.cast`) terminal stream, and dark-mode vector SVG badges.
@@ -236,16 +250,17 @@ Subcommand Examples:
 - [x] **Phase 0**: Architecture RFC & Domain Model Design ([Specification](docs/ARCHITECTURE.md)).
 - [x] **Phase P0**: 9-Crate Modular Cargo Workspace Scaffold & ModuleRegistry ([Guide](docs/MODULAR_FRAMEWORK.md)).
 - [x] **Phase 1**: Algebraic State Machine & Event Loop implementation (`nereus-engine`).
-- [x] **Phase 2**: Multi-provider LLM runtime (`StubLLMClient`, `OpenRouterClient`, `AnthropicClient`).
-- [x] **Phase 3**: Diagnostic, Coach (DAG sort), Tutor, and Socratic Examiner agents (`nereus-agents`).
-- [x] **Phase 4**: Ratatui Terminal User Interface (TUI) cockpit & Animated Socratic Lighthouse (`nereus-tui`).
-- [x] **Phase 5**: WebAssembly (WASM) in-memory code execution sandbox via `wasmtime` (`nereus-sandbox`).
-- [x] **Phase 6**: SQLite WAL session persistence & declarative schema migrations (`nereus-storage`).
-- [x] **Phase CI**: Automated GitHub Actions CI/CD Quality Gates (`cargo fmt`, `clippy -D warnings`, test suites).
-- [x] **Phase MVP**: Interactive full-screen terminal event loop, diagnostic quiz widget, and bundled Rust curriculum.
-- [x] **Phase 8**: Single-binary packaging, npm wrapper, and Homebrew tap distribution.
-- [ ] **Phase 2.1**: Dynamic shared library (`.dylib` / `.so`) Tier-2 hot-reloading host (`nereus-plugin`).
-- [ ] **Phase 2.2**: WebAssembly Component Model Plugin Host (`nereus-plugin`).
+- [x] **Phase 2 (v0.3.0)**: Extensible Pedagogical Ecosystem, Local Inference & Multi-Agent Swarm.
+  - [x] **AST Static Analysis**: `syn`-based visitor identifying anti-patterns (`nereus-sandbox`).
+  - [x] **Local LLM Providers**: Pure-Rust `candle` and `Ollama` daemon integration (`nereus-llm`).
+  - [x] **Librarian & Adversary Agents**: Knowledge citation engine & property-based fuzzer (`nereus-agents`).
+  - [x] **Wasm Component Model**: Canonical WIT curriculum component runner (`nereus-plugin`).
+  - [x] **Cockpit UX Polish**: Undo/Redo, line numbers, modal search, and mouse support (`nereus-tui`).
+  - [x] **Full-Text Search & Git Sync**: SQLite FTS5 index and Git journal sync (`nereus-storage`).
+- [ ] **Phase 3 (v0.4.0)**: Distributed Swarm & Multi-Device Synchronous Mentorship.
+  - [ ] **Distributed Multi-Agent Swarm**: Parallel agent collaboration with decentralized blackboard architecture.
+  - [ ] **Socratic Voice Cockpit**: Real-time voice interaction via Whisper and local TTS streaming.
+  - [ ] **Web WASI Playground**: Direct browser-based execution cockpit compiled to WASM.
 
 ---
 
